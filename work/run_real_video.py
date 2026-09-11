@@ -1,4 +1,4 @@
-"""Run a real video through the video-input pipeline (COLMAP + Brush)."""
+"""Run photos and/or video clips through the scene pipeline (COLMAP + Brush)."""
 import json, sys, time
 from pathlib import Path
 import numpy as np
@@ -8,15 +8,22 @@ ROOT = Path(r'C:/Users/reality/Documents/Codex/2026-09-11/i-w').resolve()
 sys.path.insert(0, str(ROOT / 'outputs'))
 from MultiViewSplat import train_scene
 
-clip = Path(sys.argv[1])
+target = Path(sys.argv[1])
 quality = sys.argv[2] if len(sys.argv) > 2 else 'Preview'
 allow_partial = (sys.argv[3].lower() == 'true') if len(sys.argv) > 3 else False
-print(f'input: {clip} quality={quality} allow_partial={allow_partial}', flush=True)
+if target.is_dir():
+    exts = {'.jpg', '.jpeg', '.png', '.webp', '.bmp', '.jfif', '.heic', '.heif',
+            '.mp4', '.mov', '.m4v', '.avi', '.webm', '.mkv'}
+    files = sorted(p for p in target.iterdir() if p.suffix.lower() in exts)
+else:
+    files = [target]
+print(f'input: {len(files)} file(s) from {target} quality={quality} allow_partial={allow_partial}', flush=True)
+assert len(files) >= 1, 'no usable image/video files found'
 
 final = None
 last = ''
 start = time.monotonic()
-for result in train_scene([str(clip)], quality, True, allow_partial):
+for result in train_scene([str(f) for f in files], quality, True, allow_partial):
     label = result[1].split('\n')[0]
     if label != last:
         print(label, flush=True)
