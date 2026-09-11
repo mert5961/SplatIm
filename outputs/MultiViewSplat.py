@@ -26,19 +26,26 @@ MAX_VIDEO_FRAMES = 120
 
 
 def extract_video_frames(video: Path, target_count: int = MAX_VIDEO_FRAMES):
-    """Sample up to target_count uniformly spaced frames from one video.
+    """Sample up to target_count frames from one video for reconstruction.
 
-    Yields (PIL.Image, label) pairs. Decoding uses the ffmpeg backend that
-    ships with imageio-ffmpeg, so no system-wide ffmpeg install is needed.
+    Dense footage (phone clips at 30-60 fps) gives COLMAP near-zero baseline
+    between adjacent frames, so sampling is capped at ~8 frames per second
+    before the total frame cap applies. Yields (PIL.Image, label) pairs.
+    Decoding uses the ffmpeg backend that ships with imageio-ffmpeg, so no
+    system-wide ffmpeg install is needed.
     """
+    import math
+
     import imageio.v2 as imageio
     import imageio_ffmpeg
     from PIL import Image
 
-    total_frames, _ = imageio_ffmpeg.count_frames_and_secs(str(video))
+    total_frames, total_secs = imageio_ffmpeg.count_frames_and_secs(str(video))
     if total_frames < 1:
         return
-    step = max(1, total_frames // target_count)
+    source_fps = total_frames / max(total_secs, 1e-6)
+    effective_count = min(target_count, max(1, math.ceil(total_secs * 8)))
+    step = max(1, round(total_frames / effective_count))
     picks = list(range(0, total_frames, step))[:target_count]
     reader = imageio.get_reader(str(video), format='ffmpeg')
     try:
@@ -227,8 +234,15 @@ def train_scene(files, quality, same_camera, allow_partial=False, progress=gr.Pr
             '--FeatureExtraction.max_image_size', '2400'], .1)
         yield from stage('2/4 · Matching overlapping photos', [colmap, 'exhaustive_matcher',
             '--database_path', db], .25)
-        yield from stage('3/4 · Estimating camera positions', [colmap, 'mapper',
-            '--database_path', db, '--image_path', images, '--output_path', sparse], .4)
+        try:
+            yield from stage('3/4 · Estimating camera positions', [colmap, 'mapper',
+                '--database_path', db, '--image_path', images, '--output_path', sparse], .4)
+        except RuntimeError as error:
+            raise RuntimeError(
+                'Camera position estimation failed. This usually means the camera itself barely moved while the '
+                'subject moved in front of it (a fixed camera filming a person, robot, or object on a turntable). '
+                'Reconstruction needs a moving camera: film a slow walkthrough around a stationary subject.'
+            ) from error
         models = []
         for path in sparse.rglob('images.bin'):
             with path.open('rb') as stream:

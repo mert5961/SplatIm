@@ -22,6 +22,16 @@ Use the **Multiple photos → one scene** tab. Select overlapping photos of the 
 The same tab accepts video files (`.mp4`, `.mov`, `.m4v`, `.avi`, `.webm`, `.mkv`). Up to 120 frames are sampled uniformly per clip, then treated exactly like uploaded photos: deduplicated, aligned with COLMAP, and trained into one shared scene. For best alignment keep the camera moving slowly and steadily; a handheld walkthrough around a building or object works well. Mixing photos and clips in one job is allowed — uncheck the same-camera option if resolutions differ.
 
 One capture session per job: a clip that jumps between unrelated locations produces disconnected components, and the weak-alignment guard will skip training unless *Train even if alignment is weak* is checked.
+#### Command line for a single video
+
+```powershell
+& 'C:\Users\reality\Documents\Codex\2026-09-11\i-w\work\sharp-env\Scripts\python.exe' `
+  'C:\Users\reality\Documents\Codex\2026-09-11\i-w\work\run_real_video.py' 'C:\path\to\clip.mp4' Preview
+```
+
+Pass `true` as the third argument to keep training even when alignment is weak. Frames land in `outputs\multi-view-scenes\<job>\input`, and the finished scene is written next to them as `scene.ply`.
+
+Not every video can become a scene: reconstruction needs a **moving camera around a stationary subject**. A fixed camera filming a moving subject (a person dancing, a robot demo) cannot be reconstructed and now fails with an explicit message.
 
 The workflow uses local COLMAP 4.2.0 to estimate camera positions and Brush 0.3.0 to train a shared Gaussian splat. Photos that cannot connect to the largest reconstructed component are omitted, and the result reports how many were used. This mode performs new scene training, not a merge of independent SHARP outputs.
 
