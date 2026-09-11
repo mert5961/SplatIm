@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+.env
+
+# Models & large binaries (re-download via setup if needed)
+work/models/
+work/**/*.pt
+work/**/*.pth
+work/**/*.onnx
+
+# Local Python virtual environment used by the launchers
+work/sharp-env/
+
+# Extracted vendor source trees (re-clone from git if needed)
+work/multiview-tools/colmap/
+work/multiview-tools/brush/
+work/ml-sharp/
+work/brush-source/
+work/colmap-docs/
+
+# Redundant archives alongside extracted dirs
+work/multiview-tools/*.zip
+work/**/*.zip
+
+# Multi-view test dataset (large raw images + precomputed sparse)
+work/multiview-test/
+
+# Generated runtime outputs
+outputs/multi-view-scenes/
+outputs/my-splats/
+outputs/sample-splat/
+outputs/__pycache__/
+outputs/ui-server.log
+outputs/ui-server-error.log
+
+# Generated test artefacts
+work/verify.py
+work/test_multiview.py
+work/sprint2_*.py
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

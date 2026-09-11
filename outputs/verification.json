@@ -1,0 +1,26 @@
+{
+  "gpu": "NVIDIA RTX PRO 6000 Blackwell Workstation Edition",
+  "torch": "2.8.0+cu128",
+  "cuda": "12.8",
+  "gaussian_count": 1179648,
+  "ply_bytes": 66061086,
+  "all_attributes_finite": true,
+  "properties": [
+    "x",
+    "y",
+    "z",
+    "f_dc_0",
+    "f_dc_1",
+    "f_dc_2",
+    "opacity",
+    "scale_0",
+    "scale_1",
+    "scale_2",
+    "rot_0",
+    "rot_1",
+    "rot_2",
+    "rot_3"
+  ],
+  "checkpoint_bytes": 2809738232,
+  "video_rendering_tested": false
+}
