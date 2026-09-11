@@ -42,7 +42,19 @@ You can also pass a folder of images. Results default to the my-splats folder be
 - Output: sample-splat/teaser.ply, 1,179,648 Gaussians, 66,061,086 bytes.
 - All exported numeric attributes are finite.
 - pip check passed.
-- The local interactive viewer starts successfully in Chrome. SHARP's optional trajectory-video renderer requires additional CUDA build tooling and was not installed.
+- The local interactive viewer starts successfully in Chrome.
+- SHARP's trajectory-video renderer (`sharp render`) compiles gsplat's CUDA
+  extension via ninja + MSVC + the local CUDA 12.8 toolkit. The required
+  compilers are already installed on this host (CMake 4.4.3, ninja 1.13.0
+  inside `work\sharp-env\Scripts`, MSVC 14.44 via the VS 2022 BuildTools at
+  `C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools`, nvcc
+  12.8). Because gsplat 1.5.3 builds with `-Wno-attributes` (a GCC/clang
+  flag that MSVC rejects with D8021), drop that flag by editing the
+  installed copy of `work\sharp-env\Lib\site-packages\gsplat\cuda\_backend.py`
+  line 177:
+  `extra_cflags = [opt_level, "-Wno-attributes"]` -> `extra_cflags = [opt_level]`.
+  After the one-time JIT build, the trajectory video renders to `*.mp4`
+  beside the input PLY.
 - Sample photo lacks focal-length EXIF, so SHARP used its default 30 mm estimate.
 
 Source and documentation: https://github.com/apple/ml-sharp

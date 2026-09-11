@@ -45,7 +45,10 @@ work/sprint2_*.py
 
 # OS / editor cruft
 .DS_Store
-Thumbs.db
-.idea/
-.vscode/
-*.swp
+# Generated test artefacts
+work/verify.py
+work/test_multiview.py
+work/sprint2_*.py
+work/sprint_video.py
+work/sprint_diag.py
+work/run_video*.bat

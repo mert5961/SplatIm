@@ -22,5 +22,14 @@
     "rot_3"
   ],
   "checkpoint_bytes": 2809738232,
-  "video_rendering_tested": false
+  "video_rendering_tested": true,
+  "video_renderer": "sharp render via gsplat JIT (ninja 1.13.0 + MSVC 14.44 + CUDA 12.8)",
+  "video_outputs": [
+    "outputs/sample-splat/video_20260911-133232/teaser.mp4",
+    "outputs/sample-splat/video_20260911-133232/teaser.depth.mp4"
+  ],
+  "video_output_bytes": {
+    "teaser.mp4": 717512,
+    "teaser.depth.mp4": 200196
+  }
 }
