@@ -34,6 +34,7 @@ Pass `true` as the third argument to keep training even when alignment is weak. 
 Not every video can become a scene: reconstruction needs a **moving camera around a stationary subject**. A fixed camera filming a moving subject (a person dancing, a robot demo) cannot be reconstructed and now fails with an explicit message.
 
 The workflow uses local COLMAP 4.2.0 to estimate camera positions and Brush 0.3.0 to train a shared Gaussian splat. Photos that cannot connect to the largest reconstructed component are omitted, and the result reports how many were used. This mode performs new scene training, not a merge of independent SHARP outputs.
+Hard subjects: portraits of a person (especially against a plain backdrop) are the hardest case for alignment. The pipeline therefore uses affine-shape SIFT with guided matching, which registered 6–8 of 10 such photos where plain SIFT managed only 3. When fewer than 70% of views align, check **Train even if alignment is weak** to build the scene from the largest connected subset.
 
 Quality presets: Preview = 1,000 steps at up to 1,024 px; Standard = 7,000 steps at up to 1,600 px; High quality = 30,000 steps at up to 1,920 px. Training is capped at 3 million Gaussians. Converted images, camera reconstruction, run log, report, and final scene.ply are kept in outputs/multi-view-scenes. The stop button preserves partial work; automatic resume is not provided.
 

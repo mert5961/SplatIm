@@ -228,12 +228,16 @@ def train_scene(files, quality, same_camera, allow_partial=False, progress=gr.Pr
                       f'({frame_count} frames extracted from video clips).\n')
         (job / 'input-names.json').write_text(json.dumps(names, indent=2), encoding='utf-8')
         db = job / 'database.db'
+        # Affine-shape SIFT (CPU) plus guided matching registered 8/10 on the
+        # hard green-screen portrait set vs 3/10 with the GPU defaults; the
+        # learned ALIKED/LOMA matchers crash this Windows build (ONNX).
         yield from stage('1/4 · Finding visual features', [colmap, 'feature_extractor',
             '--database_path', db, '--image_path', images, '--ImageReader.camera_model', 'SIMPLE_RADIAL',
             '--ImageReader.single_camera', str(int(same_camera)),
-            '--FeatureExtraction.max_image_size', '2400'], .1)
+            '--FeatureExtraction.max_image_size', '2400',
+            '--SiftExtraction.estimate_affine_shape', '1'], .1)
         yield from stage('2/4 · Matching overlapping photos', [colmap, 'exhaustive_matcher',
-            '--database_path', db], .25)
+            '--database_path', db, '--FeatureMatching.guided_matching', '1'], .25)
         try:
             yield from stage('3/4 · Estimating camera positions', [colmap, 'mapper',
                 '--database_path', db, '--image_path', images, '--output_path', sparse], .4)
