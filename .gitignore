@@ -23,10 +23,6 @@ work/ml-sharp/
 work/brush-source/
 work/colmap-docs/
 
-# Redundant archives alongside extracted dirs
-work/multiview-tools/*.zip
-work/**/*.zip
-
 # Multi-view test dataset (large raw images + precomputed sparse)
 work/multiview-test/
 
@@ -41,14 +37,12 @@ outputs/ui-server-error.log
 # Generated test artefacts
 work/verify.py
 work/test_multiview.py
-work/sprint2_*.py
+work/sprint_*.py
+work/run_video*.bat
 
 # OS / editor cruft
 .DS_Store
-# Generated test artefacts
-work/verify.py
-work/test_multiview.py
-work/sprint2_*.py
-work/sprint_video.py
-work/sprint_diag.py
-work/run_video*.bat
+Thumbs.db
+.idea/
+.vscode/
+*.swp

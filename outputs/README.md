@@ -17,6 +17,11 @@ It opens a local page at `http://127.0.0.1:7860`. Upload a photo, click **Create
 ### Multiple photos into one connected scene
 
 Use the **Multiple photos → one scene** tab. Select overlapping photos of the same stationary scene taken from different positions, then click **Build one connected scene**. Start with Preview to check alignment, then use Standard or High quality for longer training. The same-camera option assumes the camera, focal length/zoom, and image dimensions are consistent; uncheck it for mixed cameras or zoom settings.
+#### Using video clips
+
+The same tab accepts video files (`.mp4`, `.mov`, `.m4v`, `.avi`, `.webm`, `.mkv`). Up to 120 frames are sampled uniformly per clip, then treated exactly like uploaded photos: deduplicated, aligned with COLMAP, and trained into one shared scene. For best alignment keep the camera moving slowly and steadily; a handheld walkthrough around a building or object works well. Mixing photos and clips in one job is allowed — uncheck the same-camera option if resolutions differ.
+
+One capture session per job: a clip that jumps between unrelated locations produces disconnected components, and the weak-alignment guard will skip training unless *Train even if alignment is weak* is checked.
 
 The workflow uses local COLMAP 4.2.0 to estimate camera positions and Brush 0.3.0 to train a shared Gaussian splat. Photos that cannot connect to the largest reconstructed component are omitted, and the result reports how many were used. This mode performs new scene training, not a merge of independent SHARP outputs.
 

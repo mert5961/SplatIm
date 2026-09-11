@@ -31,5 +31,14 @@
   "video_output_bytes": {
     "teaser.mp4": 717512,
     "teaser.depth.mp4": 200196
+  },
+  "video_input_tested": true,
+  "video_input_test": {
+    "clip": "work/multiview-test/synthetic-walk.mp4 (20 stills, 2 fps)",
+    "frames_sampled": 20,
+    "aligned": "20/20",
+    "sparse_points": 4607,
+    "gaussians": 5628,
+    "job": "outputs/multi-view-scenes/20260911-134337-4f5e2f"
   }
 }

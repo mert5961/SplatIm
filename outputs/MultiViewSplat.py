@@ -21,6 +21,33 @@ JOBS = ROOT / 'multi-view-scenes'
 _cancel = threading.Event()
 _active = threading.Event()
 
+VIDEO_SUFFIXES = {'.mp4', '.mov', '.m4v', '.avi', '.webm', '.mkv'}
+MAX_VIDEO_FRAMES = 120
+
+
+def extract_video_frames(video: Path, target_count: int = MAX_VIDEO_FRAMES):
+    """Sample up to target_count uniformly spaced frames from one video.
+
+    Yields (PIL.Image, label) pairs. Decoding uses the ffmpeg backend that
+    ships with imageio-ffmpeg, so no system-wide ffmpeg install is needed.
+    """
+    import imageio.v2 as imageio
+    import imageio_ffmpeg
+    from PIL import Image
+
+    total_frames, _ = imageio_ffmpeg.count_frames_and_secs(str(video))
+    if total_frames < 1:
+        return
+    step = max(1, total_frames // target_count)
+    picks = list(range(0, total_frames, step))[:target_count]
+    reader = imageio.get_reader(str(video), format='ffmpeg')
+    try:
+        for pick in picks:
+            frame = reader.get_data(pick)
+            yield Image.fromarray(frame), f'{video.name} @ frame {pick}'
+    finally:
+        reader.close()
+
 
 def stop_training():
     if _active.is_set():
@@ -30,8 +57,8 @@ def stop_training():
 
 
 def train_scene(files, quality, same_camera, allow_partial=False, progress=gr.Progress()):
-    if not files or len(files) < 3:
-        raise gr.Error('Choose at least 3 overlapping photos. For useful coverage, aim for 20–100 or more.')
+    if not files:
+        raise gr.Error('Choose at least 3 overlapping photos, or one or more video clips showing the same stationary scene.')
     colmaps = list((TOOLS / 'colmap').rglob('colmap.exe'))
     if not colmaps or not BRUSH.is_file():
         raise gr.Error('COLMAP or Brush is missing from the local installation.')
@@ -153,9 +180,24 @@ def train_scene(files, quality, same_camera, allow_partial=False, progress=gr.Pr
         names = {}
         hashes = set()
         dimensions = set()
-        for index, filename in enumerate(files):
+        counter = 0
+        frame_count = 0
+        for filename in files:
             source = Path(filename)
-            name = f'{index:05d}.jpg'
+            if source.suffix.lower() in VIDEO_SUFFIXES:
+                progress(None, desc=f'Extracting frames from {source.name}')
+                for frame, label in extract_video_frames(source):
+                    digest = hashlib.sha256(frame.tobytes()).hexdigest()
+                    if digest in hashes:
+                        continue
+                    hashes.add(digest)
+                    dimensions.add(frame.size)
+                    name = f'{counter:05d}.jpg'
+                    frame.save(images / name, quality=95)
+                    names[name] = label
+                    counter += 1
+                    frame_count += 1
+                continue
             with Image.open(source) as photo:
                 photo = ImageOps.exif_transpose(photo)
                 photo = photo.convert('RGB')
@@ -165,15 +207,18 @@ def train_scene(files, quality, same_camera, allow_partial=False, progress=gr.Pr
                 hashes.add(digest)
                 dimensions.add(photo.size)
                 exif = photo.getexif().tobytes()
+                name = f'{counter:05d}.jpg'
                 photo.convert('RGB').save(images / name, quality=95, exif=exif)
             names[name] = source.name
+            counter += 1
         unique_count = len(names)
         if unique_count < 3:
-            raise RuntimeError('Fewer than 3 unique images remain after removing duplicates.')
+            raise RuntimeError('Fewer than 3 unique views remain after removing duplicates.')
         if same_camera and len(dimensions) != 1:
             raise RuntimeError('Image dimensions differ. Uncheck the same-camera option and try again.')
         with log_path.open('a', encoding='utf-8') as log:
-            log.write(f'Prepared {unique_count} unique images from {len(files)} uploads.\n')
+            log.write(f'Prepared {unique_count} unique views from {len(files)} uploads '
+                      f'({frame_count} frames extracted from video clips).\n')
         (job / 'input-names.json').write_text(json.dumps(names, indent=2), encoding='utf-8')
         db = job / 'database.db'
         yield from stage('1/4 · Finding visual features', [colmap, 'feature_extractor',
@@ -205,7 +250,7 @@ def train_scene(files, quality, same_camera, allow_partial=False, progress=gr.Pr
             log.write(f'\nALIGNMENT: {registered}/{unique_count} unique photos, {point_count} triangulated points.\n')
         if weak and not allow_partial:
             raise RuntimeError(f'Alignment is too weak for a reliable scene: {registered}/{unique_count} unique photos and {point_count} 3D points. Training was skipped. Add more overlapping views of a motionless subject. Enable experimental partial training only if you want this incomplete reconstruction.')
-        yield from stage(f'3/4 · Correcting lenses ({registered}/{len(files)} photos aligned)',
+        yield from stage(f'3/4 · Correcting lenses ({registered}/{unique_count} views aligned)',
             [colmap, 'image_undistorter', '--image_path', images, '--input_path', model,
              '--output_path', dataset, '--output_type', 'COLMAP', '--max_image_size', str(resolution)], .55)
         yield from stage(f'4/4 · Training one scene · {steps:,} steps',
@@ -220,13 +265,13 @@ def train_scene(files, quality, same_camera, allow_partial=False, progress=gr.Pr
         vertices = PlyData.read(result)['vertex'].data
         if not len(vertices) or not all(np.isfinite(vertices[name]).all() for name in vertices.dtype.names):
             raise RuntimeError('The exported splat is empty or has invalid numeric data.')
-        report = {'input_photos': len(files), 'unique_photos': unique_count, 'sparse_points': point_count, 'aligned_photos': registered, 'components': len(models),
+        report = {'input_uploads': len(files), 'video_frames': frame_count, 'unique_photos': unique_count, 'sparse_points': point_count, 'aligned_photos': registered, 'components': len(models),
                   'steps': steps, 'gaussians': len(vertices), 'output': str(result)}
         (job / 'report.json').write_text(json.dumps(report, indent=2), encoding='utf-8')
-        warning = (f' **{len(files)-registered} photos were not included in the largest connected scene.**'
-                   if registered < len(files) else '')
+        warning = (f' **{unique_count-registered} views were not included in the largest connected scene.**'
+                   if registered < unique_count else '')
         progress(1, desc='Scene ready')
-        yield str(result), f'Finished: **{registered}/{len(files)} photos** combined into one scene with **{len(vertices):,} Gaussians**.{warning}\n\nOpen the downloaded PLY in the **View splat** tab.', str(log_path), tail_log()
+        yield str(result), f'Finished: **{registered}/{unique_count} views** combined into one scene with **{len(vertices):,} Gaussians**.{warning}\n\nOpen the downloaded PLY in the **View splat** tab.', str(log_path), tail_log()
     except (RuntimeError, InterruptedError, OSError, ValueError) as error:
         with log_path.open('a', encoding='utf-8') as log:
             log.write(f'\nSTOP: {error}\n')

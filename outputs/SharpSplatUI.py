@@ -82,9 +82,12 @@ with gr.Blocks(title="SHARP — Image to Gaussian Splat") as demo:
                 "sharp photo with clear depth and avoid expecting unseen sides of an object or scene."
             )
         with gr.Tab("Multiple photos → one scene"):
-            gr.Markdown('Upload overlapping photos of the **same stationary place or object**, taken from different positions. '
-                        'Aim for 20–100+ photos and roughly 70–80% overlap. Alignment and training can take several minutes or longer.')
-            multi_photos = gr.File(label='Photos of one scene', file_count='multiple', file_types=['image'], type='filepath')
+            gr.Markdown('Upload overlapping photos **or video clips** of the **same stationary place or object**, '
+                        'captured from different positions. Aim for 20–100+ photos (videos are sampled automatically, '
+                        'up to 120 frames per clip) with roughly 70–80% overlap. Alignment and training can take several minutes or longer.')
+            multi_photos = gr.File(label='Photos or videos of one scene', file_count='multiple',
+                                   file_types=['image', 'video', '.mp4', '.mov', '.m4v', '.avi', '.webm', '.mkv'],
+                                   type='filepath')
             with gr.Row():
                 quality = gr.Radio(['Preview', 'Standard', 'High quality'], value='Standard', label='Training quality')
                 same_camera = gr.Checkbox(value=True, label='All photos use the same camera, zoom, and resolution')
