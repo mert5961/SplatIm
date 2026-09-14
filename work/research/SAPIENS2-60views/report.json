@@ -1,0 +1,10 @@
+{
+  "frames": 60,
+  "trimap_frames": 12,
+  "unknown_mae_vs_rvm": 0.07569632275650899,
+  "unknown_mae_vs_ma2": 0.05129811788598696,
+  "fg_recall_sapiens": 0.9959784001111984,
+  "bg_leak_sapiens": 0.00011169196010503886,
+  "bg_leak_rvm": 8.738960027317629e-05,
+  "bg_leak_ma2": 0.0016097748112038346
+}
