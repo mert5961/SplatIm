@@ -1,7 +1,8 @@
 # Final status — Research02 epics A-F (branch refactor/c-plan-rgba-30k)
 
-Winner: E3 aw0.50 — 110,889 Gaussians, train-view leakage 0.9%
-(`outputs/multi-view-scenes/20260914-145455-person-e3-aw0.50/scene.ply`).
+Winner: E3x aw0.65 — 115,886 Gaussians, train-view leakage 0.8%
+(`outputs/multi-view-scenes/20260914-154428-person-e3x-aw0.65/scene.ply`;
+aw0.80 ties at 0.8%/120,191 G — 0.65 preferred).
 B6 frozen at work/research/FREEZE-B6-manifest.json. Master untouched.
 
 ## Epic completion

@@ -4,7 +4,7 @@ Branch: refactor/c-plan-rgba-30k. All values measured, none estimated.
 
 | Gate | Target | Measured | Verdict |
 |------|--------|----------|---------|
-| Train-view leakage (winner E3 aw0.50) | <1% | 0.9% (110,889 G) | PASS |
+| Train-view leakage (winner E3x aw0.65) | <1% | 0.8% (115,886 G) | PASS |
 | EVAL 48-train leakage | <1% | 1.1% (85,529 G) | MARGINAL (proxy views) |
 | Held-out rendered L_outside | <1% | 4.3% RGB-energy proxy | NOT MET — RGB-only export; true alpha needs eval_export.rs fix (parked, no Rust toolchain) |
 | Core dE00 median / p95 (B2-source) | <1 / <3 | 0.0 / 1.25 (n=1,033,234) | PASS |
@@ -14,7 +14,7 @@ Branch: refactor/c-plan-rgba-30k. All values measured, none estimated.
 | Certain-BG leak | no increase | ~0.0001 (all models) | PASS |
 | Boundary temporal vs RVM | reduced | RVM 0.478 vs MA2 0.492 (confounded) | UNPROVEN — orbit-subset flow measures view change, not jitter |
 | F1 far floaters | 0 | 0.0 both | PASS |
-| F1 edge band B0->winner | down | 8.5% -> 0.9% | PASS |
+| F1 edge band B0->winner | down | 8.5% -> 0.8% | PASS |
 
 Blocked (need user): B2 SAM3.1 (gated HF), F2 GVHMR (SMPL+Drive), F3 (needs F2).
-Winner artifact: outputs/multi-view-scenes/20260914-145455-person-e3-aw0.50/scene.ply
+Winner artifact: outputs/multi-view-scenes/20260914-154428-person-e3x-aw0.65/scene.ply (115,886 G, 0.8%; aw0.80 ties at 120,191 G — 0.65 preferred, fewer Gaussians).
