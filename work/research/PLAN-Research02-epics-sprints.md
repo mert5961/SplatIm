@@ -45,6 +45,9 @@ Gate: identity stable on early distractor frames, else stop (no matting yet).
   boundary/foreground authority = YES. Disagreement vs MA2 = confidence.
 - [ ] **C3 μMatting (optional).** Benchmark only if C1/C2 leave edge quality
   open. 1080×1920 source fits its high-res design.
+- [ ] **C4 VideoMama (optional, non-blocking).** Consider only as an extra
+  temporal-matte cross-check if C1/C2 disagree badly; never on the critical
+  path. Evaluate install cost first, drop if heavy.
 
 Rule: run each independently, measure, no averaging. Trimap from B:
 erode(M,r)=FG, outside dilate(M,2r)=BG, r=round(0.0025·min(H,W)).
