@@ -102,9 +102,13 @@ def main() -> int:
          '--FeatureMatching.use_gpu', '1', '--FeatureMatching.guided_matching', '1'])
     sparse = job / 'dataset' / 'sparse'
     sparse.mkdir(parents=True)
-    run([str(COLMAP), 'mapper', '--database_path', str(db),
-         '--image_path', str(job / 'input'), '--output_path', str(sparse)])
-
+    r = subprocess.run([str(COLMAP), 'mapper', '--database_path', str(db),
+                        '--image_path', str(job / 'input'), '--output_path', str(sparse)],
+                       capture_output=True, text=True)
+    if r.returncode != 0 or not (sparse / 'images.bin').exists():
+        print('mapper produced no model (likely narrow baseline); aborting', flush=True)
+        print(r.stdout[-2000:], r.stderr[-2000:], flush=True)
+        raise SystemExit(10)
     # Gate + report.
     txt = job / 'sparse_txt'
     txt.mkdir()
