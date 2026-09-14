@@ -1,0 +1,14 @@
+{
+  "B0": {
+    "views": 20,
+    "edge_band_frac": 0.0845,
+    "far_floater_frac": 0.0,
+    "highU_inside_frac": 0.0079
+  },
+  "AW050": {
+    "views": 20,
+    "edge_band_frac": 0.0087,
+    "far_floater_frac": 0.0,
+    "highU_inside_frac": 0.0045
+  }
+}
