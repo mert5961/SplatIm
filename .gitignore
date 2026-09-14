@@ -27,10 +27,11 @@ work/cutierepo/
 work/sam2repo/
 work/sam3repo/
 work/matanyone2repo/
+work/sapiens2repo/
 work/gvhmrrepo/
 work/ma2-env/
 work/uvx/
-work/research/SAM21-60views/mask_0*.npy
+work/research/SAM21-60views/mask_*.npy
 work/research/CUTIE-60views/cutie_fwd_*.npy
 work/research/MA2-60views/frames_jpg_person60/
 work/research/MA2-60views/frames_jpg_person60_*.mp4
@@ -41,7 +42,6 @@ work/research/FGUV3-60views/
 work/research/PLATE-KEY-60views/key_*.png
 work/research/SAM21-60views/frames_jpg/
 work/research/SAM21-60views/logits_*.npy
-work/research/SAPIENS2-60views/vis/
 
 # Multi-view test dataset (large raw images + precomputed sparse)
 work/multiview-test/
