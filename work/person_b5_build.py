@@ -95,13 +95,11 @@ def main() -> int:
 
     # COLMAP from scratch.
     db = job / 'database.db'
-    if db.exists():
-        db.unlink()
     run([str(COLMAP), 'feature_extractor', '--database_path', str(db),
          '--image_path', str(job / 'input'), '--ImageReader.single_camera', '1',
-         '--ImageReader.camera_model', 'PINHOLE', '--SiftExtraction.use_gpu', '1'])
+         '--ImageReader.camera_model', 'PINHOLE', '--FeatureExtraction.use_gpu', '1'])
     run([str(COLMAP), 'exhaustive_matcher', '--database_path', str(db),
-         '--SiftMatching.use_gpu', '1', '--SiftMatching.guided_matching', '1'])
+         '--FeatureMatching.use_gpu', '1', '--FeatureMatching.guided_matching', '1'])
     sparse = job / 'dataset' / 'sparse'
     sparse.mkdir(parents=True)
     run([str(COLMAP), 'mapper', '--database_path', str(db),
