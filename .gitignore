@@ -39,6 +39,7 @@ outputs/ui-server-error.log
 work/verify.py
 work/test_multiview.py
 work/sprint_*.py
+work/session-summary*.md
 work/run_video*.bat
 
 # OS / editor cruft
