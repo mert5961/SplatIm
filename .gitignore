@@ -19,10 +19,26 @@ work/sharp-env/
 # Extracted vendor source trees (re-clone from git if needed)
 work/multiview-tools/colmap/
 work/multiview-tools/brush/
-work/ml-sharp/
 work/brush-source/
 work/colmap-docs/
+work/ml-sharp/
 work/rvm/
+work/sam2repo/
+work/sam3repo/
+work/cutierepo/
+work/matanyone2repo/
+work/sapiens2repo/
+work/ma2-env/
+work/uvx/
+work/research/SAM21-60views/frames_jpg/
+work/research/SAM21-60views/mask_*.npy
+work/research/SAM21-60views/logits_*.npy
+work/research/CUTIE-60views/cutie_fwd_*.npy
+work/research/MA2-60views/frames_jpg_person60/
+work/research/MA2-60views/*.mp4
+work/research/MA2-60views/mask0.png
+work/research/PLATE-KEY-60views/key_*.png
+work/research/SAPIENS2-60views/vis/
 
 # Multi-view test dataset (large raw images + precomputed sparse)
 work/multiview-test/
