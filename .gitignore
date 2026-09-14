@@ -41,6 +41,7 @@ work/test_multiview.py
 work/sprint_*.py
 work/session-summary*.md
 work/run_video*.bat
+target/
 
 # OS / editor cruft
 .DS_Store
