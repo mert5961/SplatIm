@@ -92,13 +92,14 @@ with gr.Blocks(title="SHARP — Image to Gaussian Splat") as demo:
                 quality = gr.Radio(['Preview', 'Standard', 'High quality'], value='Standard', label='Training quality')
                 same_camera = gr.Checkbox(value=True, label='All photos use the same camera, zoom, and resolution')
                 allow_partial = gr.Checkbox(value=False, label='Train even if alignment is weak (experimental)')
+                mask_bg = gr.Checkbox(value=False, label='Ignore green screen background')
             with gr.Row():
                 train = gr.Button('Build one connected scene', variant='primary')
                 stop = gr.Button('Stop multi-photo job')
             multi_status = gr.Markdown('Ready. Only photos that can be aligned into the largest connected scene will be used.')
             multi_result = gr.File(label='Connected scene (.ply)', interactive=False)
             multi_log = gr.File(label='Run log', interactive=False)
-            train.click(train_scene, [multi_photos, quality, same_camera, allow_partial], [multi_result, multi_status, multi_log],
+            train.click(train_scene, [multi_photos, quality, same_camera, allow_partial, mask_bg], [multi_result, multi_status, multi_log],
                         concurrency_id='gpu', concurrency_limit=1)
             stop.click(stop_training, outputs=multi_status, queue=False)
         with gr.Tab("View splat"):

@@ -63,7 +63,39 @@ def stop_training():
     return 'No multi-photo job is running.'
 
 
-def train_scene(files, quality, same_camera, allow_partial=False, progress=gr.Progress()):
+def write_green_screen_masks(dataset: Path) -> float:
+    """Key out a green backdrop from the undistorted dataset images.
+
+    Writes one grayscale PNG per image into ``dataset/masks`` (Brush picks
+    the folder up automatically and ignores black regions while training).
+    Returns the mean background fraction, 0.0 when the set is not a
+    green screen and no masks were written.
+    """
+    import numpy as np
+    from PIL import Image, ImageFilter
+
+    images_dir = dataset / 'images'
+    coverage = []
+    for image_path in sorted(p for p in images_dir.iterdir() if p.suffix.lower() in {'.jpg', '.jpeg', '.png', '.tif', '.tiff', '.webp'}):
+        with Image.open(image_path) as img:
+            a = np.asarray(img.convert('RGB'), dtype=np.float32) / 255.0
+        greenness = a[..., 1] - np.maximum(a[..., 0], a[..., 2])
+        background = (greenness > 0.12) & (a[..., 1] > 0.12)
+        coverage.append(float(background.mean()))
+    if not coverage or float(np.mean(coverage)) < 0.05:
+        return 0.0
+    masks_dir = dataset / 'masks'
+    masks_dir.mkdir(exist_ok=True)
+    for image_path in sorted(p for p in images_dir.iterdir() if p.suffix.lower() in {'.jpg', '.jpeg', '.png', '.tif', '.tiff', '.webp'}):
+        with Image.open(image_path) as img:
+            a = np.asarray(img.convert('RGB'), dtype=np.float32) / 255.0
+        background = (a[..., 1] - np.maximum(a[..., 0], a[..., 2]) > 0.12) & (a[..., 1] > 0.12)
+        mask = Image.fromarray(np.where(background, 0, 255).astype('uint8'), 'L').filter(ImageFilter.GaussianBlur(2))
+        mask.save(masks_dir / (image_path.stem + '.png'))
+    return float(np.mean(coverage))
+
+
+def train_scene(files, quality, same_camera, allow_partial=False, mask_background=False, progress=gr.Progress()):
     if not files:
         raise gr.Error('Choose at least 3 overlapping photos, or one or more video clips showing the same stationary scene.')
     colmaps = list((TOOLS / 'colmap').rglob('colmap.exe'))
@@ -271,6 +303,14 @@ def train_scene(files, quality, same_camera, allow_partial=False, progress=gr.Pr
         yield from stage(f'3/4 · Correcting lenses ({registered}/{unique_count} views aligned)',
             [colmap, 'image_undistorter', '--image_path', images, '--input_path', model,
              '--output_path', dataset, '--output_type', 'COLMAP', '--max_image_size', str(resolution)], .55)
+        if mask_background:
+            keyed = write_green_screen_masks(dataset)
+            if keyed > 0:
+                with log_path.open('a', encoding='utf-8') as log:
+                    log.write(f'\nGREEN SCREEN: keyed {keyed:.0%} mean background out of training.\n')
+            else:
+                with log_path.open('a', encoding='utf-8') as log:
+                    log.write('\nGREEN SCREEN: no green backdrop detected; training without masks.\n')
         yield from stage(f'4/4 · Training one scene · {steps:,} steps',
             [BRUSH, dataset, '--total-steps', str(steps), '--max-resolution', str(resolution),
              '--max-splats', '3000000', '--export-every', str(steps), '--export-path', job,

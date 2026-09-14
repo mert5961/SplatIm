@@ -49,6 +49,14 @@
     "regression_after_tuning": {
       "south_building": "20/20, 7065 points",
       "synthetic_clip": "20/20, 6793 points"
+    },
+    "masked_retrain": {
+      "feature": "green-screen keying (masks folder, Brush native)",
+      "background_coverage": "49-69% per photo, mean 57%",
+      "job": "outputs/multi-view-scenes/20260914-074051-aa0d93",
+      "sparse_points": 559,
+      "gaussians": 9859,
+      "quality": "Standard (7000 steps)"
     }
   }
 }

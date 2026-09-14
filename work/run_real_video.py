@@ -11,19 +11,20 @@ from MultiViewSplat import train_scene
 target = Path(sys.argv[1])
 quality = sys.argv[2] if len(sys.argv) > 2 else 'Preview'
 allow_partial = (sys.argv[3].lower() == 'true') if len(sys.argv) > 3 else False
+mask_background = (sys.argv[4].lower() == 'true') if len(sys.argv) > 4 else False
 if target.is_dir():
     exts = {'.jpg', '.jpeg', '.png', '.webp', '.bmp', '.jfif', '.heic', '.heif',
             '.mp4', '.mov', '.m4v', '.avi', '.webm', '.mkv'}
     files = sorted(p for p in target.iterdir() if p.suffix.lower() in exts)
 else:
     files = [target]
-print(f'input: {len(files)} file(s) from {target} quality={quality} allow_partial={allow_partial}', flush=True)
+print(f'input: {len(files)} file(s) from {target} quality={quality} allow_partial={allow_partial} mask_background={mask_background}', flush=True)
 assert len(files) >= 1, 'no usable image/video files found'
 
 final = None
 last = ''
 start = time.monotonic()
-for result in train_scene([str(f) for f in files], quality, True, allow_partial):
+for result in train_scene([str(f) for f in files], quality, True, allow_partial, mask_background):
     label = result[1].split('\n')[0]
     if label != last:
         print(label, flush=True)
