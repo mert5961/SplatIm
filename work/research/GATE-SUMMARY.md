@@ -16,6 +16,8 @@ Branch: refactor/c-plan-rgba-30k. All values measured, none estimated.
 | Boundary temporal vs RVM | reduced | RVM 0.478 vs MA2 0.492 (confounded) | UNPROVEN — orbit-subset flow measures view change, not jitter |
 | F1 far floaters | 0 | 0.0 both | PASS |
 | F1 edge band B0->winner | down | 8.5% -> 0.8% | PASS |
+| G1 renderer calibration vs brush | within factor | 12/12 held views, ratio mine/brush 1.075-1.200 (mean 1.127), per-pixel corr 0.9997 | PASS (faithful; brush runs ~1.13x lower via 1/255 skip + 4e-4 early-termination; NOTE-g1-renderer.md) |
+| G2 post-hoc prune sweep (aw0.65 winner, G1 renderer) | monotonic down | tau 0->0.20: L_outside 2.831%->2.477% (96,538->67,048 G), FG-recall 0.9932->0.9919 | MEASURED — monotonic, helps ~12% relative, insufficient alone; G3 retrains in-training at tau=0.20 |
 
 Blocked (need user): B2 SAM3.1 (gated HF), F2 GVHMR (SMPL+Drive), F3 (needs F2).
 Winner artifact: outputs/multi-view-scenes/20260914-154428-person-e3x-aw0.65/scene.ply (115,886 G, 0.8%; aw0.80 ties at 120,191 G — 0.65 preferred, fewer Gaussians).
