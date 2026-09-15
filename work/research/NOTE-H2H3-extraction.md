@@ -35,7 +35,27 @@ Same regions as H0 (interior erode 20, band 12, outside dilate 4), 12 held
  | H2 keep.ply (raw) | 6.03 | 10.85 | 0.966 | 0.37 | 0.22 |
  | H2 keep.ply + scale shrink 10 mm cap | 9.26 | 12.55 | **0.455 (broken)** | 0.16 | — |
  | H2 keep-despill.ply (raw) | 6.20 | 11.81 | 0.966 | 0.37 | 0.22 |
- | **H2 keep-despill.ply + matte clip 4 px** | 6.20 | 11.81 | **0.976** | 0 (clipped) | 0 (clipped) |
+ | H2 keep-despill.ply + matte clip 4 px | 6.20 | 11.81 | 0.976 | 0 (clipped) | 0 (clipped) |
+ | **H2 keep-unc-despill.ply + matte clip 4 px** | **5.91** | **11.39** | **0.981** | 0 (clipped) | 0 (clipped) |
+ ### Uncertain-band analysis (signed distance to RVM mask edge, 12 held views)
+ 
+ | class | n | edge-dist median | p10 / p90 | fraction outside mask |
+ |---|---|---|---|---|
+ | keep | 48,838 | +58.8 px (deep interior) | +29 / +127 | 0.2% |
+ | uncertain | 10,896 | **−10.6 px (the boundary itself)** | −147 / +96 | 53% |
+ | hide | 368,571 | −214 px (deep exterior) | −323 / −111 | 99.7% |
+ 
+ The H2 classification is spatially clean: keep = interior, uncertain =
+ silhouette edge (half inside, half outside the mask), hide = exterior.
+ Uncertain color (0.32, 0.41, 0.37) is green-tinted (boundary bleed),
+ opacity 0.075 (faint).
+ 
+ Split/adjust test: `keep-unc-despill.ply` = keep ∪ uncertain, despilled,
+ uncertain opacity halved (0.075→0.037): interior 6.20→**5.91**, band
+ 11.81→**11.39**, IoU 0.976→**0.981** — the uncertain band (the actual
+ silhouette edge, green-tinted, faint) fills the boundary and improves
+ every metric. Raw halo 4-8 px rises 0.22→0.33 (faint fringe, clipped
+ away in compositing).
 
 ### Findings
 1. **Interior detail ≈ B0** (6.03 vs 5.13): extraction preserves the
@@ -56,10 +76,13 @@ Same regions as H0 (interior erode 20, band 12, outside dilate 4), 12 held
 5. **Matte clip at composite time** (α ×= dilate(RVM mask, 4 px)) is the
    clean halo fix: standard CG compositing; geometry untouched.
 
-### Deliverable shape (proposed)
-- `keep-despill.ply` — the 3D person asset (B0 detail, despilled).
-- Compositing rule: render person, clip alpha with per-view RVM matte
-  (dilated 4 px), premultiply.
-- Optional next (only if clip edge is unsatisfactory): targeted boundary
-  splat shrink using per-view silhouette distance, or short refine pass on
-  uncertain-band splats with GT color+alpha supervision.
+ ### Deliverable shape (final)
+ - **`work/research/H2-extract/keep-unc-despill.ply`** — the 3D person
+   asset: 59,734 Gaussians (keep 48,838 interior + 10,896 uncertain
+   boundary, despilled, boundary opacity halved). Best measured variant:
+   interior dE00 5.91 (B0 5.13, masked E3x 6.24), band 11.39, silhouette
+   IoU 0.981, halo 0 outside matte.
+ - Compositing rule: render person, clip alpha with per-view RVM matte
+   (dilated 4 px), premultiply.
+ - `keep-despill.ply` retained as the interior-only fallback (fewer
+   splats, no boundary band).

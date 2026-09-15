@@ -85,7 +85,7 @@ def main():
     keys = ['interior_dE00', 'band_dE00', 'silhouette_iou', 'alpha_outside']
     agg = {k: round(float(np.mean([res[s][k] for s in STEMS])), 4) for k in keys}
     agg['n_splat'] = int(len(xyz))
-    out = ROOT / f'work/research/H3-eval-{ply.parent.name}-clip{clip}.json'
+    out = ROOT / f'work/research/H3-eval-{ply.stem}-clip{clip}.json'
     out.write_text(json.dumps({'ply': str(ply), 'agg': agg, 'per_view': res}, indent=2))
     print('AGG', agg)
     print('wrote', out)
