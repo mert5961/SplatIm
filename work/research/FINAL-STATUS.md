@@ -23,13 +23,18 @@ B6 frozen at work/research/FREEZE-B6-manifest.json. Master untouched.
 - Train-view leakage (proxy): B0 6.7% -> winner 0.8% (target <1% MET on proxy).
 - Held-out TRUE-alpha leakage (full-60, brush positional eval split,
   12 honest held views, `work/person_eval_held.py`):
-  aw0.65 2.53%, aw0.80 2.33% — target <1% NOT MET. Alpha-weight series
-  exhausted (0.50 proxy 4.3% -> 0.65 -> 0.80, diminishing returns);
-  residual is structural (3D Gaussians protrude past the 2D RVM matte
-  in unobserved held views). 3 measured attempts on this gate: stop
-  condition reached, halted honestly rather than gate-skipped.
-  Artifacts: outputs/multi-view-scenes/20260915-0430*-person-eval-held-aw*/
-  (metrics.json, timing.json, report.json w/ hashes, 12 RGBA evals).
+  alpha-weight series: aw0.65 2.53%, aw0.80 2.33% (diminishing returns).
+  Structural lever (single-variable): in-training prune_opacity sweep
+  (G3, `work/person_eval_held_prune.py`, brush --prune-opacity):
+  tau 0.0078->0.20->0.30->0.40 gives L 2.54%->1.44%->1.42%->1.43%
+  (96,538->52,589->33,057->20,556 G). Plateau at tau>=0.20: residual is
+  high-opacity splats protruding past the 2D matte in held views, not
+  low-opacity ghosts — unreachable by opacity pruning. Gate <1% NOT MET
+  (best 1.42% at tau=0.30); documented single-variable dead end
+  (NOTE-g3-prune-lever.md). Guards hold: FG-recall >=0.9915, certain-BG
+  1.86->0.75%, dE00 ~3.1/10.7, IoU 0.963->0.971.
+  Artifacts: outputs/multi-view-scenes/20260915-0{430,715,721,724}*-person-eval-held-*
+  (job dirs gitignored; metrics in work/research/HELD-*-metrics.json).
 - Held-out auxiliaries (aw0.80): certain-BG leak 1.6%, certain-FG recall
   99.28%, IoU 96.4%, boundary F1 0.586, render-vs-GT dE00 (FG core)
   median 3.17 / p95 10.7 — held-view render quality documented.
@@ -39,9 +44,9 @@ B6 frozen at work/research/FREEZE-B6-manifest.json. Master untouched.
   clip 0.37 flagged.
 
 ## Resume pointers
-- Blocked items need user: HF login for SAM3.1, SMPL signup + Drive ckpts.
-- EVAL-split (48/12) retrain DONE — see held-out gate above; the <1%
-  held-out alpha gate fails at 2.3-2.5% and needs a structural lever
-  (opacity/depth prior/matte supervision quality), not alpha weight.
-  Remaining user-gated: HF login for SAM3.1, SMPL signup + Drive ckpts,
-  viewer verdict on anatomical ghosting.
+- Held-out alpha gate: best single-variable result 1.42% (prune tau=0.30,
+  33,057 G) vs target <1%. Dead end documented (NOTE-g3-prune-lever.md);
+  further improvement needs a second variable (depth/matte supervision
+  quality), out of scope per single-variable stop rule.
+- Remaining user-gated: HF login for SAM3.1 (B2), SMPL signup + Drive
+  ckpts (F2), F3 needs F2.
