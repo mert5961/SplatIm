@@ -19,23 +19,23 @@ Build & install:
 
 Eval-split rerun at aw0.65 with new binary:
 - Job `20260915-035046-person-eval-aw065-rgba`.
-- 48 train + 12 brush-held views, 30k steps, growth_stop 12k, cap 1M,
-  match_alpha_weight=0.65, eval every 5000, eval_split_every=5.
+- Dataset = 48-train-view subset (NOT the held-out set — see correction below).
+- 30k steps, growth_stop 12k, cap 1M, match_alpha_weight=0.65,
+  eval every 5000, eval_split_every=5 (no eval views remain in 48-view set;
+  the "eval" views written are drawn from the 48 train views).
 - 10 of 12 eval PNGs exported at step 30000 (2 lost to export race).
 
-TRUE held-out L_outside (rendered alpha vs RVM-mask outside region):
-| Stat | Value |
-|------|-------|
-| n_views | 10 |
-| mean | 0.0238 |
-| min | 0.0108 |
-| max | 0.0456 |
+Measured on those 10 48-train-view evals (rendered alpha vs RVM-mask outside):
+mean 0.0238, min 0.0108, max 0.0456.
 
-> <1% target NOT MET on true alpha (mean 2.38%). The earlier 4.3% RGB-energy
-> proxy was overestimating leakage; truth is ~half of that (better) but still
-> above target.
+CORRECTION (20260915): this is a TRAIN-view leakage number, not the held-out
+L_outside. The true held-out run (full-60 dataset, brush positional
+eval split = 12 honest held views) is `work/person_eval_held.py`; its
+result replaces this in GATE-SUMMARY. Artifact `HELDOUT-true-alpha.json`
+retained and relabelled: `work/research/HELDOUT-true-alpha.json` ->
+rename to `TRAINVIEW-true-alpha-aw065.json`.
 
-Artifact: `work/research/HELDOUT-true-alpha.json`.
+> The <1% held-out target is judged by person_eval_held.py output only.
 
-GATE-SUMMARY update: L_outside row swaps "RGB proxy 4.3%" → "true alpha 2.38%".
-Status changes from "NOT MET" to "TRUE METRIC > 1% TARGET".
+Artifact (relabelled): `work/research/TRAINVIEW-true-alpha-aw065.json`
+(formerly HELDOUT-true-alpha.json — mislabel corrected).
