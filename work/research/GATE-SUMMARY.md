@@ -6,7 +6,7 @@ Branch: refactor/c-plan-rgba-30k. All values measured, none estimated.
 |------|--------|----------|---------|
 | Train-view leakage (winner E3x aw0.65) | <1% | 0.8% (115,886 G) | PASS |
 | EVAL 48-train leakage | <1% | 1.1% (85,529 G) | MARGINAL (proxy views) |
-| Held-out rendered L_outside | <1% | 4.3% RGB-energy proxy | NOT MET — RGB-only export; true alpha needs eval_export.rs fix (parked, no Rust toolchain) |
+| Held-out rendered L_outside | <1% | true alpha = 2.38% (n=10 views) | NOT MET (true alpha reduces from RGB proxy 4.3% to 2.38%, still above 1% target) |
 | Core dE00 median / p95 (B2-source) | <1 / <3 | 0.0 / 1.25 (n=1,033,234) | PASS |
 | Core dE00 despill-v3 | <1 / <3 | 2.06 / 5.53 | FAIL — v3 not shippable, B6/v2 line kept |
 | Edge green vs B6 ~0.04 | materially better | v2 pre-train 0.19->0.04; v3 gamut clip 0.37 | PARTIAL — v2 holds, v3 regresses core |
