@@ -1,0 +1,84 @@
+{
+  "ply": "C:\\Users\\reality\\Documents\\Codex\\2026-09-11\\i-w\\outputs\\multi-view-scenes\\20260915-111609-person-hq-vid174253\\scene.ply",
+  "agg": {
+    "interior_dE00": 5.2868,
+    "band_dE00": 8.7766,
+    "silhouette_iou": 0.4772,
+    "alpha_outside": 0.8883,
+    "n_splat": 1139588
+  },
+  "per_view": {
+    "00001": {
+      "interior_dE00": 4.794,
+      "band_dE00": 8.979,
+      "silhouette_iou": 0.5085,
+      "alpha_outside": 0.77431
+    },
+    "00011": {
+      "interior_dE00": 4.469,
+      "band_dE00": 8.329,
+      "silhouette_iou": 0.5608,
+      "alpha_outside": 0.89
+    },
+    "00021": {
+      "interior_dE00": 7.391,
+      "band_dE00": 11.307,
+      "silhouette_iou": 0.4017,
+      "alpha_outside": 0.9506
+    },
+    "00031": {
+      "interior_dE00": 5.043,
+      "band_dE00": 8.234,
+      "silhouette_iou": 0.5249,
+      "alpha_outside": 0.75811
+    },
+    "00041": {
+      "interior_dE00": 3.886,
+      "band_dE00": 7.508,
+      "silhouette_iou": 0.5837,
+      "alpha_outside": 0.88202
+    },
+    "00051": {
+      "interior_dE00": 5.786,
+      "band_dE00": 9.045,
+      "silhouette_iou": 0.6507,
+      "alpha_outside": 0.87557
+    },
+    "00061": {
+      "interior_dE00": 7.787,
+      "band_dE00": 9.791,
+      "silhouette_iou": 0.4069,
+      "alpha_outside": 0.9405
+    },
+    "00071": {
+      "interior_dE00": 4.765,
+      "band_dE00": 8.368,
+      "silhouette_iou": 0.4139,
+      "alpha_outside": 0.86095
+    },
+    "00081": {
+      "interior_dE00": 4.034,
+      "band_dE00": 8.691,
+      "silhouette_iou": 0.4392,
+      "alpha_outside": 0.91206
+    },
+    "00091": {
+      "interior_dE00": 4.817,
+      "band_dE00": 7.762,
+      "silhouette_iou": 0.4387,
+      "alpha_outside": 0.94431
+    },
+    "00101": {
+      "interior_dE00": 5.602,
+      "band_dE00": 8.015,
+      "silhouette_iou": 0.4808,
+      "alpha_outside": 0.89439
+    },
+    "00111": {
+      "interior_dE00": 5.067,
+      "band_dE00": 9.29,
+      "silhouette_iou": 0.3165,
+      "alpha_outside": 0.97624
+    }
+  }
+}

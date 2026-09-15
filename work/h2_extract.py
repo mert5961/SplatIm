@@ -80,8 +80,21 @@ def render_geometry(xyz, cov3d, cam, q, t, w, h):
 
 
 def main():
-    ply = Path(sys.argv[1]) if len(sys.argv) > 1 else \
-        ROOT / 'outputs/multi-view-scenes/20260914-080603-07ed0a/scene.ply'
+    args = list(sys.argv[1:])
+    def take(flag, default):
+       if flag in args:
+           i = args.index(flag)
+           val = args[i + 1]
+           del args[i:i + 2]
+           return val
+    def _g(name):
+        return globals()[name]
+    REPORT = Path(take('--report', str(ROOT / 'work/research/H2-extract.json')))
+    SPARSE = Path(take('--sparse', str(_g('SPARSE'))))
+    MASKS = Path(take('--masks', str(_g('MASKS'))))
+    OUT = Path(take('--out', str(_g('OUT'))))
+    ply = Path(args[0]) if args else \
+       ROOT / 'outputs/multi-view-scenes/20260914-080603-07ed0a/scene.ply'
     OUT.mkdir(parents=True, exist_ok=True)
 
     v = PlyData.read(str(ply))['vertex']
@@ -200,7 +213,7 @@ def main():
                'hide': round(float(opacity[hide].mean()) if hide.any() else 0, 3),
                'uncertain': round(float(opacity[unc].mean()) if unc.any() else 0, 3),
            }}
-    (ROOT / 'work/research/H2-extract.json').write_text(json.dumps(rep, indent=2))
+    (REPORT).write_text(json.dumps(rep, indent=2))
     print(json.dumps(rep, indent=2))
     return 0
 

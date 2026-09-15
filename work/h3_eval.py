@@ -40,11 +40,21 @@ def main():
     from plyfile import PlyData
 
     args = list(sys.argv[1:])
-    clip = 0
-    if '--clip' in args:
-        i = args.index('--clip')
-        clip = int(args[i + 1])
-        del args[i:i + 2]
+    def take(flag, cast, default):
+        if flag in args:
+            i = args.index(flag)
+            val = cast(args[i + 1])
+            del args[i:i + 2]
+            return val
+        return default
+    def _g(name):
+        return globals()[name]
+    clip = take('--clip', int, 0)
+    SPARSE = Path(take('--sparse', str, str(_g('SPARSE'))))
+    IMAGES = Path(take('--images', str, str(_g('IMAGES'))))
+    MASKS = Path(take('--masks', str, str(_g('MASKS'))))
+    stems_arg = take('--stems', str, None)
+    STEMS = stems_arg.split(',') if stems_arg else _g('STEMS')
     ply = Path(args[0])
 
     v = PlyData.read(str(ply))['vertex']

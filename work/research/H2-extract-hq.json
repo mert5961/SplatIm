@@ -1,0 +1,18 @@
+{
+  "ply": "C:\\Users\\reality\\Documents\\Codex\\2026-09-11\\i-w\\outputs\\multi-view-scenes\\20260915-111609-person-hq-vid174253\\scene.ply",
+  "n": 1139588,
+  "t_vis": 0.15,
+  "n_keep": 107648,
+  "n_hide": 1010266,
+  "n_uncertain": 21674,
+  "fg_median": {
+    "keep": 32.06,
+    "hide": 0.0,
+    "uncertain": 4.76
+  },
+  "opacity_mean": {
+    "keep": 0.246,
+    "hide": 0.116,
+    "uncertain": 0.124
+  }
+}

@@ -75,3 +75,8 @@ work/research/H0-compare/masked-e3x/
 work/research/H2-extract/hide.ply
 work/research/H2-extract/keep-repaired.ply
 work/research/H3-keep-repaired-render/
+
+# >100MB (GitHub push limit)
+work/research/H2-extract-hq/hide.ply
+work/research/H2-extract-hq/*.ply
+work/research/H2-extract-hq/*.npz

@@ -1,84 +1,84 @@
 {
-  "ply": "C:\\Users\\reality\\Documents\\Codex\\2026-09-11\\i-w\\work\\research\\H2-extract\\keep-despill.ply",
+  "ply": "C:\\Users\\reality\\Documents\\Codex\\2026-09-11\\i-w\\work\\research\\H2-extract\\keep-unc-despill.ply",
   "agg": {
-    "interior_dE00": 6.1954,
-    "band_dE00": 11.8097,
-    "silhouette_iou": 0.9762,
-    "alpha_outside": 0.4558,
-    "n_splat": 48838
+    "interior_dE00": 5.9114,
+    "band_dE00": 11.387,
+    "silhouette_iou": 0.9811,
+    "alpha_outside": 0.0,
+    "n_splat": 59734
   },
   "per_view": {
     "00001": {
-      "interior_dE00": 5.898,
-      "band_dE00": 13.424,
+      "interior_dE00": 5.693,
+      "band_dE00": 12.894,
       "silhouette_iou": 0.981,
-      "alpha_outside": 0.51599
+      "alpha_outside": 0.0
     },
     "00009": {
-      "interior_dE00": 4.211,
-      "band_dE00": 9.055,
-      "silhouette_iou": 0.9859,
-      "alpha_outside": 0.41481
+      "interior_dE00": 4.073,
+      "band_dE00": 8.833,
+      "silhouette_iou": 0.9862,
+      "alpha_outside": 0.0
     },
     "00016": {
-      "interior_dE00": 8.622,
-      "band_dE00": 12.949,
-      "silhouette_iou": 0.9844,
-      "alpha_outside": 0.45885
+      "interior_dE00": 7.838,
+      "band_dE00": 12.316,
+      "silhouette_iou": 0.9849,
+      "alpha_outside": 0.0
     },
     "00026": {
-      "interior_dE00": 6.597,
-      "band_dE00": 12.957,
-      "silhouette_iou": 0.9845,
-      "alpha_outside": 0.54653
+      "interior_dE00": 6.368,
+      "band_dE00": 12.716,
+      "silhouette_iou": 0.9849,
+      "alpha_outside": 0.0
     },
     "00039": {
-      "interior_dE00": 4.12,
-      "band_dE00": 12.905,
+      "interior_dE00": 3.984,
+      "band_dE00": 12.542,
       "silhouette_iou": 0.9819,
-      "alpha_outside": 0.50649
+      "alpha_outside": 0.0
     },
     "00048": {
-      "interior_dE00": 4.403,
-      "band_dE00": 9.275,
-      "silhouette_iou": 0.9904,
-      "alpha_outside": 0.3828
+      "interior_dE00": 4.311,
+      "band_dE00": 9.156,
+      "silhouette_iou": 0.9905,
+      "alpha_outside": 0.0
     },
     "00056": {
-      "interior_dE00": 8.355,
-      "band_dE00": 12.553,
-      "silhouette_iou": 0.9835,
-      "alpha_outside": 0.41255
+      "interior_dE00": 7.545,
+      "band_dE00": 11.913,
+      "silhouette_iou": 0.9843,
+      "alpha_outside": 0.0
     },
     "00067": {
-      "interior_dE00": 9.796,
-      "band_dE00": 13.556,
-      "silhouette_iou": 0.9738,
-      "alpha_outside": 0.49347
+      "interior_dE00": 9.561,
+      "band_dE00": 13.569,
+      "silhouette_iou": 0.9751,
+      "alpha_outside": 0.0
     },
     "00079": {
-      "interior_dE00": 4.791,
-      "band_dE00": 12.746,
-      "silhouette_iou": 0.94,
-      "alpha_outside": 0.50259
+      "interior_dE00": 4.554,
+      "band_dE00": 11.851,
+      "silhouette_iou": 0.9685,
+      "alpha_outside": 0.0
     },
     "00088": {
-      "interior_dE00": 5.492,
-      "band_dE00": 10.349,
-      "silhouette_iou": 0.9813,
-      "alpha_outside": 0.35318
+      "interior_dE00": 5.435,
+      "band_dE00": 10.209,
+      "silhouette_iou": 0.9832,
+      "alpha_outside": 0.0
     },
     "00100": {
-      "interior_dE00": 6.735,
-      "band_dE00": 11.361,
-      "silhouette_iou": 0.9551,
-      "alpha_outside": 0.38284
+      "interior_dE00": 6.426,
+      "band_dE00": 10.441,
+      "silhouette_iou": 0.976,
+      "alpha_outside": 0.0
     },
     "00109": {
-      "interior_dE00": 5.325,
-      "band_dE00": 10.587,
-      "silhouette_iou": 0.9722,
-      "alpha_outside": 0.4991
+      "interior_dE00": 5.149,
+      "band_dE00": 10.204,
+      "silhouette_iou": 0.9764,
+      "alpha_outside": 0.0
     }
   }
 }
