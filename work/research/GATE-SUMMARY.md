@@ -6,7 +6,8 @@ Branch: refactor/c-plan-rgba-30k. All values measured, none estimated.
 |------|--------|----------|---------|
 | Train-view leakage (winner E3x aw0.65) | <1% | 0.8% (115,886 G) | PASS |
 | EVAL 48-train leakage | <1% | 1.1% (85,529 G) | MARGINAL (proxy views) |
-| Held-out rendered L_outside | <1% | 4.3% RGB proxy (aw0.50, 12 held views, 20260914-151822) | NOT MET — true-alpha held-out run in progress (20260915); NOTE-rgba-alpha-export 2.38% was 48-train views, not held-out (label corrected) |
+| Held-out true-alpha L_outside (12 honest held views, brush positional split) | <1% | aw0.65: 2.53% (1.07-5.76); aw0.80: 2.33% (1.36-4.35) | NOT MET — 3rd measured attempt (0.50 4.3% proxy -> 0.65 -> 0.80); diminishing returns, residual structural. Halted per stop condition. Jobs 20260915-0430*-person-eval-held-aw* |
+| Held-out aux (aw0.80) | — | certain-BG 1.6%, FG-recall 99.28%, IoU 96.4%, bF1 0.586, render dE00 FG-core 3.17/10.7 | documented (no target set for render dE00) |
 | Core dE00 median / p95 (B2-source) | <1 / <3 | 0.0 / 1.25 (n=1,033,234) | PASS |
 | Core dE00 despill-v3 | <1 / <3 | 2.06 / 5.53 | FAIL — v3 not shippable, B6/v2 line kept |
 | Edge green vs B6 ~0.04 | materially better | v2 pre-train 0.19->0.04; v3 gamut clip 0.37 | PARTIAL — v2 holds, v3 regresses core |
