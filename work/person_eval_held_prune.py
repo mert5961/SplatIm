@@ -62,6 +62,7 @@ def run(aw: str, prune: str) -> Path:
 def score(job: Path, aw: str, prune: str) -> dict:
     from PIL import ImageFilter
     import colour
+    from PIL import Image
 
     evdir = job / 'eval_30000'
     per, Ls, cbl, cfr, ious, f1s, proxies, de = {}, [], [], [], [], [], [], []
