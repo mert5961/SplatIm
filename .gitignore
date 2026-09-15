@@ -68,3 +68,10 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# H0/H2 research renders & large PLYs (reproducible via work/splat_rgb_render.py + work/h2_extract.py)
+work/research/H0-compare/b0-full/
+work/research/H0-compare/masked-e3x/
+work/research/H2-extract/hide.ply
+work/research/H2-extract/keep-repaired.ply
+work/research/H3-keep-repaired-render/

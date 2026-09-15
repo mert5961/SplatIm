@@ -1,0 +1,18 @@
+{
+  "ply": "C:\\Users\\reality\\Documents\\Codex\\2026-09-11\\i-w\\outputs\\multi-view-scenes\\20260914-080603-07ed0a\\scene.ply",
+  "n": 428305,
+  "t_vis": 0.15,
+  "n_keep": 48838,
+  "n_hide": 368571,
+  "n_uncertain": 10896,
+  "fg_median": {
+    "keep": 20.54,
+    "hide": 0.0,
+    "uncertain": 4.22
+  },
+  "opacity_mean": {
+    "keep": 0.237,
+    "hide": 0.125,
+    "uncertain": 0.075
+  }
+}
