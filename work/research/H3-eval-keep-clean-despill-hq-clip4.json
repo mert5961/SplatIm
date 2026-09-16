@@ -1,0 +1,84 @@
+{
+  "ply": "C:\\Users\\reality\\Documents\\Codex\\2026-09-11\\i-w\\work\\research\\H2-extract-hq\\keep-clean-despill-hq.ply",
+  "agg": {
+    "interior_dE00": 6.1203,
+    "band_dE00": 12.5437,
+    "silhouette_iou": 0.9803,
+    "alpha_outside": 0.0,
+    "n_splat": 107648
+  },
+  "per_view": {
+    "00001": {
+      "interior_dE00": 5.513,
+      "band_dE00": 13.706,
+      "silhouette_iou": 0.98,
+      "alpha_outside": 0.0
+    },
+    "00011": {
+      "interior_dE00": 5.321,
+      "band_dE00": 11.716,
+      "silhouette_iou": 0.984,
+      "alpha_outside": 0.0
+    },
+    "00021": {
+      "interior_dE00": 8.318,
+      "band_dE00": 12.379,
+      "silhouette_iou": 0.9735,
+      "alpha_outside": 0.0
+    },
+    "00031": {
+      "interior_dE00": 5.694,
+      "band_dE00": 12.729,
+      "silhouette_iou": 0.9877,
+      "alpha_outside": 0.0
+    },
+    "00041": {
+      "interior_dE00": 3.874,
+      "band_dE00": 11.88,
+      "silhouette_iou": 0.9898,
+      "alpha_outside": 0.0
+    },
+    "00051": {
+      "interior_dE00": 7.028,
+      "band_dE00": 13.308,
+      "silhouette_iou": 0.9883,
+      "alpha_outside": 0.0
+    },
+    "00061": {
+      "interior_dE00": 8.781,
+      "band_dE00": 12.024,
+      "silhouette_iou": 0.9784,
+      "alpha_outside": 0.0
+    },
+    "00071": {
+      "interior_dE00": 6.097,
+      "band_dE00": 13.797,
+      "silhouette_iou": 0.9811,
+      "alpha_outside": 0.0
+    },
+    "00081": {
+      "interior_dE00": 4.323,
+      "band_dE00": 12.249,
+      "silhouette_iou": 0.9722,
+      "alpha_outside": 0.0
+    },
+    "00091": {
+      "interior_dE00": 5.036,
+      "band_dE00": 10.461,
+      "silhouette_iou": 0.9844,
+      "alpha_outside": 0.0
+    },
+    "00101": {
+      "interior_dE00": 6.3,
+      "band_dE00": 11.413,
+      "silhouette_iou": 0.9747,
+      "alpha_outside": 0.0
+    },
+    "00111": {
+      "interior_dE00": 7.159,
+      "band_dE00": 14.863,
+      "silhouette_iou": 0.9691,
+      "alpha_outside": 0.0
+    }
+  }
+}

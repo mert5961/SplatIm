@@ -1,0 +1,84 @@
+{
+  "ply": "C:\\Users\\reality\\Documents\\Codex\\2026-09-11\\i-w\\work\\research\\H2-extract-hq\\keep-edges-despill-hq.ply",
+  "agg": {
+    "interior_dE00": 5.7666,
+    "band_dE00": 10.7888,
+    "silhouette_iou": 0.9681,
+    "alpha_outside": 0.3215,
+    "n_splat": 122242
+  },
+  "per_view": {
+    "00001": {
+      "interior_dE00": 5.07,
+      "band_dE00": 11.405,
+      "silhouette_iou": 0.9601,
+      "alpha_outside": 0.35218
+    },
+    "00011": {
+      "interior_dE00": 4.867,
+      "band_dE00": 10.618,
+      "silhouette_iou": 0.9749,
+      "alpha_outside": 0.23836
+    },
+    "00021": {
+      "interior_dE00": 8.294,
+      "band_dE00": 12.459,
+      "silhouette_iou": 0.9648,
+      "alpha_outside": 0.21383
+    },
+    "00031": {
+      "interior_dE00": 5.221,
+      "band_dE00": 10.429,
+      "silhouette_iou": 0.9789,
+      "alpha_outside": 0.30697
+    },
+    "00041": {
+      "interior_dE00": 3.925,
+      "band_dE00": 10.371,
+      "silhouette_iou": 0.9772,
+      "alpha_outside": 0.34216
+    },
+    "00051": {
+      "interior_dE00": 6.654,
+      "band_dE00": 11.678,
+      "silhouette_iou": 0.9868,
+      "alpha_outside": 0.19699
+    },
+    "00061": {
+      "interior_dE00": 8.736,
+      "band_dE00": 11.778,
+      "silhouette_iou": 0.96,
+      "alpha_outside": 0.34533
+    },
+    "00071": {
+      "interior_dE00": 5.211,
+      "band_dE00": 10.102,
+      "silhouette_iou": 0.9713,
+      "alpha_outside": 0.3193
+    },
+    "00081": {
+      "interior_dE00": 4.232,
+      "band_dE00": 10.46,
+      "silhouette_iou": 0.9551,
+      "alpha_outside": 0.44511
+    },
+    "00091": {
+      "interior_dE00": 4.887,
+      "band_dE00": 8.956,
+      "silhouette_iou": 0.9691,
+      "alpha_outside": 0.35042
+    },
+    "00101": {
+      "interior_dE00": 6.112,
+      "band_dE00": 9.652,
+      "silhouette_iou": 0.9666,
+      "alpha_outside": 0.32621
+    },
+    "00111": {
+      "interior_dE00": 5.99,
+      "band_dE00": 11.557,
+      "silhouette_iou": 0.952,
+      "alpha_outside": 0.42104
+    }
+  }
+}

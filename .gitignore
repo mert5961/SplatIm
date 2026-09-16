@@ -80,3 +80,5 @@ work/research/H3-keep-repaired-render/
 work/research/H2-extract-hq/hide.ply
 work/research/H2-extract-hq/*.ply
 work/research/H2-extract-hq/*.npz
+work/research/H2-extract-hq/*.npy
+work/research/HQ-renders/
