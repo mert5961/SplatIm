@@ -1,0 +1,84 @@
+{
+  "ply": "C:\\Users\\reality\\Documents\\Codex\\2026-09-11\\i-w\\work\\research\\YUNUS-extract\\keep-yunus.ply",
+  "agg": {
+    "interior_dE00": 5.5058,
+    "band_dE00": 9.1215,
+    "silhouette_iou": 0.9719,
+    "alpha_outside": 0.0,
+    "n_splat": 52188
+  },
+  "per_view": {
+    "00001": {
+      "interior_dE00": 5.915,
+      "band_dE00": 6.211,
+      "silhouette_iou": 0.9643,
+      "alpha_outside": 0.0
+    },
+    "00011": {
+      "interior_dE00": 8.042,
+      "band_dE00": 17.966,
+      "silhouette_iou": 0.9588,
+      "alpha_outside": 0.0
+    },
+    "00021": {
+      "interior_dE00": 5.421,
+      "band_dE00": 7.172,
+      "silhouette_iou": 0.9775,
+      "alpha_outside": 0.0
+    },
+    "00031": {
+      "interior_dE00": 7.869,
+      "band_dE00": 13.993,
+      "silhouette_iou": 0.9705,
+      "alpha_outside": 0.0
+    },
+    "00041": {
+      "interior_dE00": 4.878,
+      "band_dE00": 7.306,
+      "silhouette_iou": 0.9818,
+      "alpha_outside": 0.0
+    },
+    "00051": {
+      "interior_dE00": 3.412,
+      "band_dE00": 5.843,
+      "silhouette_iou": 0.9658,
+      "alpha_outside": 0.0
+    },
+    "00061": {
+      "interior_dE00": 7.232,
+      "band_dE00": 12.95,
+      "silhouette_iou": 0.9825,
+      "alpha_outside": 0.0
+    },
+    "00071": {
+      "interior_dE00": 4.113,
+      "band_dE00": 4.833,
+      "silhouette_iou": 0.9808,
+      "alpha_outside": 0.0
+    },
+    "00081": {
+      "interior_dE00": 4.075,
+      "band_dE00": 6.93,
+      "silhouette_iou": 0.9636,
+      "alpha_outside": 0.0
+    },
+    "00091": {
+      "interior_dE00": 4.472,
+      "band_dE00": 8.698,
+      "silhouette_iou": 0.9722,
+      "alpha_outside": 0.0
+    },
+    "00101": {
+      "interior_dE00": 4.431,
+      "band_dE00": 6.794,
+      "silhouette_iou": 0.9699,
+      "alpha_outside": 0.0
+    },
+    "00111": {
+      "interior_dE00": 6.21,
+      "band_dE00": 10.762,
+      "silhouette_iou": 0.975,
+      "alpha_outside": 0.0
+    }
+  }
+}
