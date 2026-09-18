@@ -12,7 +12,7 @@ Double-click `Start-SharpSplatUI.ps1`, or run:
 & 'C:\Users\reality\Documents\Codex\2026-09-11\i-w\outputs\Start-SharpSplatUI.ps1'
 ```
 
-It opens a local page at `http://127.0.0.1:7860`. Upload a photo, click **Create Gaussian Splat**, and download the `.ply` output. The **View splat** tab loads `.ply`, `.splat`, and `.ksplat` files in a local interactive viewer. Select generated files directly from `outputs\my-splats`; the viewer code is stored locally in `outputs\viewer-assets`, so viewing does not need an Internet connection. Converted files are kept in `outputs\my-splats`.
+It opens a local page at `http://127.0.0.1:7860`. Upload a photo (or a video clip — its middle frame is used), leave **Person only** enabled to remove the room/background and crop around the detected person, then click **Create Gaussian Splat**. The cutout preview shows what will be kept. Turn **Person only** off when you want the complete image as a scene. Download the `.ply` output from the page. The **View splat** tab loads `.ply`, `.splat`, and `.ksplat` files in a local interactive viewer. Select generated files directly from `outputs\my-splats`; the viewer code is stored locally in `outputs\viewer-assets`, so viewing does not need an Internet connection. Converted files are kept in `outputs\my-splats`.
 
 ### Multiple photos into one connected scene
 
