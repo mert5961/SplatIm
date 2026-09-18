@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+import os
 import shutil
 import subprocess
 import sys
@@ -15,6 +16,19 @@ import torch
 from PIL import Image, ImageOps
 from plyfile import PlyData, PlyElement
 from MultiViewSplat import VIDEO_SUFFIXES, train_scene, stop_training
+from VideoSubjectSplat import (
+    EXTRACT_PANEL,
+    PREPARE_PANEL,
+    REFINE_PANEL,
+    SAM_PANEL,
+    TRAIN_PANEL,
+    extract_subject_splat,
+    load_target_frame,
+    prepare_video,
+    refine_matanyone2,
+    run_sam2,
+    train_masked_splat,
+)
 
 
 APP_DIR = Path(__file__).resolve().parent
@@ -306,17 +320,205 @@ def train_scene_live(files, quality, same_camera, allow_partial, mask_background
         yield result, status, log_file, board, live_log
 
 
-with gr.Blocks(title="SHARP — Image to Gaussian Splat") as demo:
+with gr.Blocks(title="SplatIm — Photo and Video to Gaussian Splat") as demo:
     gr.Markdown(
-        "# Photo → Gaussian Splat\n"
-        "Create a quick splat from one photo, or combine overlapping photos into one connected scene."
+        "# Photo / video → Gaussian Splat\n"
+        "Create a quick estimate from one frame, reconstruct a selected video subject, "
+        "or combine overlapping views into one connected scene."
     )
     with gr.Tabs():
+        with gr.Tab("Video → selected subject"):
+            video_subject_state = gr.State({})
+            gr.Markdown(
+                "Use this for an **orbit video of a mostly stationary person or object**. The workflow is "
+                "intentionally staged: you choose the target with a brush, inspect every propagated mask, "
+                "optionally refine it, and only then spend time training the splat."
+            )
+            with gr.Tabs():
+                with gr.Tab("1 · Prepare"):
+                    with gr.Row():
+                        with gr.Column(scale=3):
+                            subject_video = gr.File(
+                                label="Orbit video",
+                                file_types=["video", ".mp4", ".mov", ".m4v", ".avi", ".webm", ".mkv"],
+                                type="filepath",
+                            )
+                            subject_quality = gr.Radio(
+                                ["Preview", "Standard", "High quality"], value="Preview",
+                                label="Reconstruction / training quality",
+                            )
+                            prepare_subject = gr.Button("Prepare and align video", variant="primary")
+                        with gr.Column(scale=2):
+                            prepare_board = gr.Markdown(PREPARE_PANEL)
+                    prepare_status = gr.Markdown(
+                        "Camera alignment happens before masking so the brush and every debug mask use the "
+                        "exact undistorted frames consumed by the splat trainer."
+                    )
+                    aligned_gallery = gr.Gallery(
+                        label="Registered frames (all views used by the pipeline)", columns=6,
+                        height=430, object_fit="contain", allow_preview=True,
+                    )
+                    with gr.Row():
+                        prepare_run_log = gr.File(label="Preparation run log", interactive=False)
+                        prepare_live_log = gr.Textbox(
+                            label="Preparation output", lines=14, max_lines=14, interactive=False,
+                        )
+
+                with gr.Tab("2 · Select + track"):
+                    gr.Markdown(
+                        "SAM 2.1 produces a **binary identity mask**: it decides which object to follow. "
+                        "It is expected to look hard around hair and fabric; the next stage creates the soft alpha matte."
+                    )
+                    with gr.Row():
+                        with gr.Column(scale=3):
+                            target_frame = gr.Slider(
+                                0, 1, value=0, step=1, label="Prompt / correction frame",
+                                info="Move to any registered frame, then paint or correct the target mask.",
+                            )
+                            target_editor = gr.ImageEditor(
+                                label="Roto-style target brush (red overlay = selected)",
+                                type="numpy", image_mode="RGBA", height=620,
+                                brush=gr.Brush(default_size=32, colors=["#ff3355"], default_color="#ff3355", color_mode="fixed"),
+                                eraser=gr.Eraser(default_size=40),
+                                layers=gr.LayerOptions(allow_additional_layers=False, layers=["Target mask"]),
+                                transforms=(), fixed_canvas=True,
+                            )
+                            target_note = gr.Markdown("Prepare the video to load a selectable frame.")
+                            track_subject = gr.Button("Propagate selection with SAM 2.1", variant="primary")
+                        with gr.Column(scale=2):
+                            sam_board = gr.Markdown(SAM_PANEL)
+                            gr.Markdown(
+                                "Paint inside the wanted person or object. After tracking, choose a bad frame "
+                                "with the slider, erase false areas or paint missing areas, then propagate again."
+                            )
+                            sam_run_log = gr.File(label="SAM 2.1 run log", interactive=False)
+                            sam_live_log = gr.Textbox(
+                                label="SAM 2.1 output", lines=14, max_lines=14, interactive=False,
+                            )
+                    sam_status = gr.Markdown("Waiting for a prepared video and brush prompt.")
+                    with gr.Tabs():
+                        with gr.Tab("Tracking overlays"):
+                            sam_overlay_gallery = gr.Gallery(
+                                label="Every tracked frame — green is selected; captions show coverage and centroid jumps",
+                                columns=5, height=650, object_fit="contain", allow_preview=True,
+                            )
+                        with gr.Tab("Binary masks"):
+                            sam_mask_gallery = gr.Gallery(
+                                label="SAM 2.1 binary identity masks", columns=6, height=650,
+                                object_fit="contain", allow_preview=True,
+                            )
+
+                with gr.Tab("3 · Refine matte"):
+                    gr.Markdown(
+                        "MatAnyone2 converts the tracked identity mask into a soft alpha matte. Inspect hair, "
+                        "hands, gaps between limbs, clothing edges, and any background that remains attached."
+                    )
+                    with gr.Row():
+                        refine_subject = gr.Button("Refine masks with MatAnyone2", variant="primary")
+                        refine_board = gr.Markdown(REFINE_PANEL)
+                    refine_status = gr.Markdown("Run SAM 2.1 first, then refine and review the alpha mattes here.")
+                    with gr.Tabs():
+                        with gr.Tab("Matte overlays"):
+                            refined_overlay_gallery = gr.Gallery(
+                                label="Every refined frame", columns=5, height=650,
+                                object_fit="contain", allow_preview=True,
+                            )
+                        with gr.Tab("Alpha mattes"):
+                            refined_mask_gallery = gr.Gallery(
+                                label="MatAnyone2 soft alpha mattes", columns=6, height=650,
+                                object_fit="contain", allow_preview=True,
+                            )
+                    with gr.Row():
+                        refine_run_log = gr.File(label="MatAnyone2 run log", interactive=False)
+                        refine_live_log = gr.Textbox(
+                            label="MatAnyone2 output", lines=14, max_lines=14, interactive=False,
+                        )
+
+                with gr.Tab("4 · Train"):
+                    gr.Markdown(
+                        "Brush trains the Gaussian scene using the reviewed masks. False foreground can create "
+                        "background Gaussians; missing foreground can remove thin body parts and hair."
+                    )
+                    with gr.Row():
+                        train_subject = gr.Button("Train masked Gaussian scene", variant="primary")
+                        train_board = gr.Markdown(TRAIN_PANEL)
+                    train_status = gr.Markdown("Review the masks before starting the GPU training stage.")
+                    raw_subject_splat = gr.File(
+                        label="Intermediate masked scene (.ply)", interactive=False
+                    )
+                    with gr.Row():
+                        train_run_log = gr.File(label="Brush training log", interactive=False)
+                        train_live_log = gr.Textbox(
+                            label="Brush output", lines=16, max_lines=16, interactive=False,
+                        )
+
+                with gr.Tab("5 · Extract + results"):
+                    gr.Markdown(
+                        "The final pass checks every trained Gaussian against the reviewed masks from all cameras, "
+                        "then separates accepted subject, uncertain boundary, and rejected background Gaussians."
+                    )
+                    with gr.Row():
+                        extract_subject = gr.Button("Extract subject-only Gaussians", variant="primary")
+                        extract_board = gr.Markdown(EXTRACT_PANEL)
+                    extract_status = gr.Markdown("Train the masked scene first, then create the subject-only PLY.")
+                    with gr.Row():
+                        final_subject_splat = gr.File(
+                            label="Final selected subject (.ply)", interactive=False
+                        )
+                        uncertain_subject_splat = gr.File(
+                            label="Debug: uncertain boundary Gaussians (.ply)", interactive=False
+                        )
+                        hidden_subject_splat = gr.File(
+                            label="Debug: rejected background Gaussians (.ply)", interactive=False
+                        )
+                    extraction_report = gr.File(label="Extraction report (.json)", interactive=False)
+                    with gr.Row():
+                        extract_run_log = gr.File(label="Extraction run log", interactive=False)
+                        extract_live_log = gr.Textbox(
+                            label="Extraction output", lines=16, max_lines=16, interactive=False,
+                        )
+
+            prepare_subject.click(
+                prepare_video,
+                [subject_video, subject_quality],
+                [video_subject_state, target_frame, target_editor, aligned_gallery,
+                 prepare_status, prepare_board, prepare_run_log, prepare_live_log],
+                concurrency_id="gpu", concurrency_limit=1,
+            )
+            target_frame.release(
+                load_target_frame, [video_subject_state, target_frame],
+                [target_editor, target_note], queue=False,
+            )
+            track_subject.click(
+                run_sam2, [video_subject_state, target_frame, target_editor],
+                [video_subject_state, sam_overlay_gallery, sam_mask_gallery, sam_status,
+                 sam_board, sam_run_log, sam_live_log],
+                concurrency_id="gpu", concurrency_limit=1,
+            )
+            refine_subject.click(
+                refine_matanyone2, [video_subject_state],
+                [video_subject_state, refined_overlay_gallery, refined_mask_gallery,
+                 refine_status, refine_board, refine_run_log, refine_live_log],
+                concurrency_id="gpu", concurrency_limit=1,
+            )
+            train_subject.click(
+                train_masked_splat, [video_subject_state, subject_quality],
+                [video_subject_state, raw_subject_splat, train_status, train_board,
+                 train_run_log, train_live_log],
+                concurrency_id="gpu", concurrency_limit=1,
+            )
+            extract_subject.click(
+                extract_subject_splat, [video_subject_state],
+                [video_subject_state, final_subject_splat, uncertain_subject_splat,
+                 hidden_subject_splat, extract_status, extract_board, extraction_report,
+                 extract_run_log, extract_live_log],
+                concurrency_id="gpu", concurrency_limit=1,
+            )
         with gr.Tab("Create splat"):
             with gr.Row():
                 with gr.Column(scale=1):
                     input_image = gr.File(
-                        label="Photo or video (one frame is used)",
+                        label="Photo or video (quick mode — one frame is used)",
                         file_types=["image", "video", ".mp4", ".mov", ".m4v", ".avi", ".webm", ".mkv"],
                         type="filepath", height=260,
                     )
@@ -334,8 +536,10 @@ with gr.Blocks(title="SHARP — Image to Gaussian Splat") as demo:
                     sharp_console = gr.Textbox(label="SHARP console output", lines=6, max_lines=6,
                                                interactive=False)
             gr.Markdown(
-                "Person only is on by default. The preview shows what will be kept; turn it off when "
-                "you want the entire room or scene. Video clips are reduced to their middle frame. "
+                "This is the **quick single-frame route**, not video reconstruction. Person only is on by "
+                "default. The preview shows what will be kept; turn it off when you want the entire room or scene. "
+                "Video clips are reduced to their middle frame. Use **Video → selected subject** when you want "
+                "to brush a target and use all aligned video views. "
                 "SHARP infers nearby viewpoints from one image, so unseen sides are still an estimate."
             )
             generate.click(
@@ -381,6 +585,7 @@ if __name__ == "__main__":
     demo.launch(
         inbrowser=True,
         server_name="127.0.0.1",
+        server_port=int(os.environ.get("GRADIO_SERVER_PORT", "7869")),
         show_error=True,
         theme=gr.themes.Soft(),
         allowed_paths=[str(APP_DIR)],

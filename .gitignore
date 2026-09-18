@@ -50,6 +50,7 @@ work/multiview-test/
 outputs/multi-view-scenes/
 outputs/my-splats/
 outputs/sample-splat/
+outputs/video-subject-jobs/
 outputs/__pycache__/
 outputs/ui-server.log
 outputs/ui-server-error.log

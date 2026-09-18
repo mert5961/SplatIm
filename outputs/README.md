@@ -1,4 +1,4 @@
-# SHARP is installed and tested
+# SplatIm local setup and workflow notes
 
 Installed locally in this task's work folder using Python 3.12, PyTorch 2.8.0 with CUDA 12.8, and Apple's pinned SHARP dependencies. The 2.81 GB model is downloaded. Keep the work folder: it contains the environment, source, and checkpoint used by the launcher.
 
@@ -9,10 +9,24 @@ Installed locally in this task's work folder using Python 3.12, PyTorch 2.8.0 wi
 Double-click `Start-SharpSplatUI.ps1`, or run:
 
 ```powershell
-& 'C:\Users\reality\Documents\Codex\2026-09-11\i-w\outputs\Start-SharpSplatUI.ps1'
+& '.\outputs\Start-SharpSplatUI.ps1'
 ```
 
-It opens a local page at `http://127.0.0.1:7860`. Upload a photo (or a video clip — its middle frame is used), leave **Person only** enabled to remove the room/background and crop around the detected person, then click **Create Gaussian Splat**. The cutout preview shows what will be kept. Turn **Person only** off when you want the complete image as a scene. Download the `.ply` output from the page. The **View splat** tab loads `.ply`, `.splat`, and `.ksplat` files in a local interactive viewer. Select generated files directly from `outputs\my-splats`; the viewer code is stored locally in `outputs\viewer-assets`, so viewing does not need an Internet connection. Converted files are kept in `outputs\my-splats`.
+It opens a local page at `http://127.0.0.1:7869`. Upload a photo (or a video clip — its middle frame is used), leave **Person only** enabled to remove the room/background and crop around the detected person, then click **Create Gaussian Splat**. The cutout preview shows what will be kept. Turn **Person only** off when you want the complete image as a scene. Download the `.ply` output from the page. The **View splat** tab loads `.ply`, `.splat`, and `.ksplat` files in a local interactive viewer. Select generated files directly from `outputs\my-splats`; the viewer code is stored locally in `outputs\viewer-assets`, so viewing does not need an Internet connection. Converted files are kept in `outputs\my-splats`.
+
+### Select one person or object from a video
+
+Use **Video → selected subject** for the inspectable video workflow. This is different from the quick **Create splat** tab: the quick tab uses only one video frame, while the video-subject workflow uses the aligned views from an orbit capture.
+
+1. Upload a video in which the camera moves around a mostly stationary person or object, choose a quality preset, and click **Prepare and align video**. The app samples up to 120 frames, reconstructs camera positions with COLMAP, and shows every registered undistorted frame.
+2. Choose any registered frame with the slider and paint a rough stroke inside the wanted subject. Click **Propagate selection with SAM 2.1**.
+3. Inspect the overlay and raw-mask galleries. They show every frame, selected-area coverage, centroid movement, and warnings for large jumps. To correct a bad result, move the slider to that frame, erase false areas or paint missing areas on the red mask layer, then propagate again.
+4. Optionally run **MatAnyone2** and compare its separate overlay/mask galleries with SAM 2.1. The most recently accepted mask source is used for training.
+5. Train the masked Gaussian scene with Brush, then run mask-guided Gaussian extraction. Keep the intermediate scene for diagnosis; the final `*-selected-subject.ply` contains the accepted subject Gaussians. `uncertain.ply` and `hide.ply` expose boundary and rejected Gaussians for debugging.
+
+Every job keeps its sampled/registered frames, prompt mask, SAM 2.1 masks and metrics, optional MatAnyone2 masks and metrics, COLMAP data, training masks, raw scene, extraction evidence, JSON reports, and full command log under `outputs\video-subject-jobs`.
+
+Camera motion is mandatory: a fixed camera recording a moving subject, or a turntable where only the object rotates, does not provide the camera geometry this pipeline needs. Use a slow orbit with strong overlap and keep the subject as still as practical.
 
 ### Multiple photos into one connected scene
 
@@ -25,8 +39,8 @@ One capture session per job: a clip that jumps between unrelated locations produ
 #### Command line for a single video
 
 ```powershell
-& 'C:\Users\reality\Documents\Codex\2026-09-11\i-w\work\sharp-env\Scripts\python.exe' `
-  'C:\Users\reality\Documents\Codex\2026-09-11\i-w\work\run_real_video.py' 'C:\path\to\clip.mp4' Preview
+& '.\work\sharp-env\Scripts\python.exe' `
+  '.\work\run_real_video.py' 'C:\path\to\clip.mp4' Preview
 ```
 
 Pass `true` as the third argument to keep training even when alignment is weak. Frames land in `outputs\multi-view-scenes\<job>\input`, and the finished scene is written next to them as `scene.ply`.
@@ -46,7 +60,7 @@ Verified on 20 images from COLMAP's public South Building dataset: 20/20 cameras
 Open PowerShell and run (replace the example image path):
 
 ```powershell
-& 'C:\Users\reality\Documents\Codex\2026-09-11\i-w\outputs\Convert-ImageToSplat.ps1' -InputPath 'C:\path\to\photo.jpg'
+& '.\outputs\Convert-ImageToSplat.ps1' -InputPath 'C:\path\to\photo.jpg'
 ```
 
 You can also pass a folder of images. Results default to the my-splats folder beside the launcher. Use -OutputPath to choose another output folder. Inference uses the local GPU and downloaded checkpoint.
