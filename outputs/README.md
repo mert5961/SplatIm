@@ -26,6 +26,8 @@ Use **Video → selected subject** for the inspectable video workflow. This is d
 
 Every job keeps its sampled/registered frames, prompt mask, SAM 2.1 masks and metrics, optional MatAnyone2 masks and metrics, COLMAP data, training masks, raw scene, extraction evidence, JSON reports, and full command log under `outputs\video-subject-jobs`.
 
+After extraction, **Recover useful uncertain splats** can score and export selected uncertain Gaussians without retraining. Choose a saved job, start with a minimum support score of **0.90**, and set a maximum number of additions. It writes a separate recovery PLY and exposes a score table, CSV, report, and added-only PLY. Lower thresholds can restore more material and also add haze; compare from the same camera angle. See [the optimization notes](../docs/optimization.md) for measurements and limitations.
+
 Camera motion is mandatory: a fixed camera recording a moving subject, or a turntable where only the object rotates, does not provide the camera geometry this pipeline needs. Use a slow orbit with strong overlap and keep the subject as still as practical.
 
 ### Multiple photos into one connected scene

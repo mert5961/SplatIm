@@ -15,6 +15,8 @@ SplatIm is a Windows desktop tool for turning photos and moving-camera videos in
 
 The video-subject workflow exposes the processing stages: COLMAP camera alignment, brush-based target selection, SAM 2.1 mask tracking, optional MatAnyone2 alpha refinement, Brush training, and mask-guided Gaussian extraction. Each stage has its own previews, status, and logs so mask problems can be found before spending time on training.
 
+The extraction panel also offers experimental recovery of uncertain splats, with a minimum support score, an addition limit, and a table of candidate scores. See the [optimization notes](docs/optimization.md) for the scoring method, progress-display behavior, and measured tradeoffs.
+
 ## Launch on the configured workstation
 
 Run `outputs/Start-SharpSplatUI.ps1` from PowerShell or double-click it in File Explorer. The local interface opens at [http://127.0.0.1:7869](http://127.0.0.1:7869).

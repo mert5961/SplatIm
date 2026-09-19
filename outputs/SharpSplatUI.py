@@ -29,6 +29,8 @@ from VideoSubjectSplat import (
     run_sam2,
     train_masked_splat,
 )
+from ProgressUI import CSS as PROGRESS_CSS, present_job
+from SubjectRecovery import export_recovery
 
 
 APP_DIR = Path(__file__).resolve().parent
@@ -320,6 +322,58 @@ def train_scene_live(files, quality, same_camera, allow_partial, mask_background
         yield result, status, log_file, board, live_log
 
 
+def prepare_subject_live(video, quality):
+    yield from present_job(prepare_video, [video, quality], label="Prepare + camera alignment",
+                           count=8, status_index=4, board_index=5, log_index=7)
+
+
+def track_subject_live(state, frame, editor):
+    yield from present_job(run_sam2, [state, frame, editor], label="SAM 2.1 identity tracking",
+                           count=7, status_index=3, board_index=4, log_index=6)
+
+
+def refine_subject_live(state):
+    yield from present_job(refine_matanyone2, [state], label="MatAnyone2 alpha refinement",
+                           count=7, status_index=3, board_index=4, log_index=6)
+
+
+def train_subject_live(state, quality):
+    yield from present_job(train_masked_splat, [state, quality], label="Brush masked training",
+                           count=6, status_index=2, board_index=3, log_index=5)
+
+
+def extract_subject_live(state):
+    yield from present_job(extract_subject_splat, [state], label="Mask-guided Gaussian extraction",
+                           count=9, status_index=4, board_index=5, log_index=8)
+
+
+def recovery_job_choices():
+    jobs = APP_DIR / "video-subject-jobs"
+    completed = [p for p in jobs.glob("*/job.json")
+                 if (p.parent / "subject-extraction/evidence.npz").is_file()
+                 and (p.parent / "subject-extraction/keep.ply").is_file()]
+    return [("Current session", "")] + [(p.parent.name, p.parent.name)
+                                          for p in sorted(completed, reverse=True)]
+
+
+def recover_subject(state, saved_job, minimum_score, maximum_added):
+    jobs = (APP_DIR / "video-subject-jobs").resolve()
+    if saved_job:
+        job = (jobs / saved_job).resolve()
+    elif state and state.get("job"):
+        job = Path(state["job"]).resolve()
+    else:
+        raise gr.Error("Choose a completed extraction or finish the current extraction first.")
+    if job.parent != jobs:
+        raise gr.Error("Choose a job from this app's saved extractions.")
+    result = export_recovery(job, float(minimum_score), int(maximum_added))
+    return (result["final"], result["recovered"], result["report"], result["scores"],
+            f"**Recovered {result['recovered_count']:,} uncertain splats.** "
+            f"Original: {result['original_count']:,} → new export: {result['final_count']:,}. "
+            "Compare both files from the same viewing angle. The support score is a heuristic, "
+            "not a probability; lower thresholds may introduce haze or background fragments.", result["preview"])
+
+
 with gr.Blocks(title="SplatIm — Photo and Video to Gaussian Splat") as demo:
     gr.Markdown(
         "# Photo / video → Gaussian Splat\n"
@@ -477,42 +531,80 @@ with gr.Blocks(title="SplatIm — Photo and Video to Gaussian Splat") as demo:
                         extract_live_log = gr.Textbox(
                             label="Extraction output", lines=16, max_lines=16, interactive=False,
                         )
+                    gr.Markdown(
+                        "### Recover useful uncertain splats\n\n"
+                        "Score the existing uncertain splats using mask support across views, proximity "
+                        "to accepted geometry, and nearby subject colors. Higher thresholds recover fewer splats. "
+                        "The maximum is a cap, not a target. Added splats are limited to local body-scale sizes; "
+                        "your original export is preserved. This does not rerun training."
+                    )
+                    saved_choices = recovery_job_choices()
+                    recovery_job = gr.Dropdown(
+                        saved_choices, value=saved_choices[1][1] if len(saved_choices) > 1 else "",
+                        label="Extraction to optimize",
+                    )
+                    refresh_recovery = gr.Button("Refresh saved extractions")
+                    with gr.Row():
+                        recovery_score = gr.Slider(.5, 1, value=.9, step=.01,
+                            label="Minimum recovery support score",
+                            info="Conservative start: 0.90. Lower it to explore the completeness / spill tradeoff.")
+                        recovery_cap = gr.Number(value=5000, minimum=0, maximum=1000000,
+                            precision=0, label="Maximum added splats (0 = original only)")
+                    recover_button = gr.Button("Score uncertain splats and export recovery", variant="primary")
+                    recovery_status = gr.Markdown("Choose a completed extraction to recover from.")
+                    with gr.Row():
+                        recovery_result = gr.File(label="Recovered subject (.ply)", interactive=False)
+                        recovery_added = gr.File(label="Debug: added splats only (.ply)", interactive=False)
+                    with gr.Row():
+                        recovery_report = gr.File(label="Recovery report (.json)", interactive=False)
+                        recovery_scores = gr.File(label="Per-splat scores (.csv)", interactive=False)
+                    recovery_table = gr.Dataframe(
+                        headers=["Scene index", "Support score", "Mask support", "Near body", "Color match", "Added"],
+                        datatype=["number", "number", "number", "number", "number", "bool"],
+                        label="Top 50 recovery candidates", interactive=False,
+                    )
+                    refresh_recovery.click(lambda: gr.update(choices=recovery_job_choices()),
+                                           outputs=recovery_job, queue=False, show_progress="hidden")
+                    recover_button.click(recover_subject,
+                        [video_subject_state, recovery_job, recovery_score, recovery_cap],
+                        [recovery_result, recovery_added, recovery_report, recovery_scores, recovery_status, recovery_table],
+                        show_progress_on=recovery_status, concurrency_id="gpu", concurrency_limit=1)
 
             prepare_subject.click(
-                prepare_video,
+                prepare_subject_live,
                 [subject_video, subject_quality],
                 [video_subject_state, target_frame, target_editor, aligned_gallery,
                  prepare_status, prepare_board, prepare_run_log, prepare_live_log],
-                concurrency_id="gpu", concurrency_limit=1,
+                concurrency_id="gpu", concurrency_limit=1, show_progress="minimal", show_progress_on=prepare_board,
             )
             target_frame.release(
                 load_target_frame, [video_subject_state, target_frame],
-                [target_editor, target_note], queue=False,
+                [target_editor, target_note], queue=False, show_progress="hidden",
             )
             track_subject.click(
-                run_sam2, [video_subject_state, target_frame, target_editor],
+                track_subject_live, [video_subject_state, target_frame, target_editor],
                 [video_subject_state, sam_overlay_gallery, sam_mask_gallery, sam_status,
                  sam_board, sam_run_log, sam_live_log],
-                concurrency_id="gpu", concurrency_limit=1,
+                concurrency_id="gpu", concurrency_limit=1, show_progress="minimal", show_progress_on=sam_board,
             )
             refine_subject.click(
-                refine_matanyone2, [video_subject_state],
+                refine_subject_live, [video_subject_state],
                 [video_subject_state, refined_overlay_gallery, refined_mask_gallery,
                  refine_status, refine_board, refine_run_log, refine_live_log],
-                concurrency_id="gpu", concurrency_limit=1,
+                concurrency_id="gpu", concurrency_limit=1, show_progress="minimal", show_progress_on=refine_board,
             )
             train_subject.click(
-                train_masked_splat, [video_subject_state, subject_quality],
+                train_subject_live, [video_subject_state, subject_quality],
                 [video_subject_state, raw_subject_splat, train_status, train_board,
                  train_run_log, train_live_log],
-                concurrency_id="gpu", concurrency_limit=1,
+                concurrency_id="gpu", concurrency_limit=1, show_progress="minimal", show_progress_on=train_board,
             )
             extract_subject.click(
-                extract_subject_splat, [video_subject_state],
+                extract_subject_live, [video_subject_state],
                 [video_subject_state, final_subject_splat, uncertain_subject_splat,
                  hidden_subject_splat, extract_status, extract_board, extraction_report,
                  extract_run_log, extract_live_log],
-                concurrency_id="gpu", concurrency_limit=1,
+                concurrency_id="gpu", concurrency_limit=1, show_progress="minimal", show_progress_on=extract_board,
             )
         with gr.Tab("Create splat"):
             with gr.Row():
@@ -588,5 +680,6 @@ if __name__ == "__main__":
         server_port=int(os.environ.get("GRADIO_SERVER_PORT", "7869")),
         show_error=True,
         theme=gr.themes.Soft(),
+        css=PROGRESS_CSS,
         allowed_paths=[str(APP_DIR)],
     )
