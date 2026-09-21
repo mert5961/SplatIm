@@ -24,6 +24,10 @@ from VideoSubjectSplat import (
     TRAIN_PANEL,
     extract_subject_splat,
     load_target_frame,
+    switch_target_frame,
+    save_target_keyframe,
+    forget_target_keyframe,
+    resume_prepared_video,
     prepare_video,
     refine_matanyone2,
     run_sam2,
@@ -31,6 +35,7 @@ from VideoSubjectSplat import (
 )
 from ProgressUI import CSS as PROGRESS_CSS, present_job
 from SubjectRecovery import export_recovery
+from SubjectKeyframes import preprocess_editor_safely
 
 
 APP_DIR = Path(__file__).resolve().parent
@@ -327,8 +332,8 @@ def prepare_subject_live(video, quality):
                            count=8, status_index=4, board_index=5, log_index=7)
 
 
-def track_subject_live(state, frame, editor):
-    yield from present_job(run_sam2, [state, frame, editor], label="SAM 2.1 identity tracking",
+def track_subject_live(state, frame, editor, context):
+    yield from present_job(run_sam2, [state, frame, editor, context], label="SAM 2.1 identity tracking",
                            count=7, status_index=3, board_index=4, log_index=6)
 
 
@@ -354,6 +359,16 @@ def recovery_job_choices():
                  and (p.parent / "subject-extraction/keep.ply").is_file()]
     return [("Current session", "")] + [(p.parent.name, p.parent.name)
                                           for p in sorted(completed, reverse=True)]
+
+
+def prepared_job_choices():
+    jobs = APP_DIR / "video-subject-jobs"
+    return [p.parent.name for p in sorted(jobs.glob("*/job.json"), reverse=True)
+            if (p.parent / "sam2_frames" / "00000.jpg").is_file()]
+
+
+LOCK_SELECTION = "(...args) => { document.getElementById('subject-selection').inert = true; return args; }"
+UNLOCK_SELECTION = "() => { document.getElementById('subject-selection').inert = false; }"
 
 
 def recover_subject(state, saved_job, minimum_score, maximum_added):
@@ -383,6 +398,9 @@ with gr.Blocks(title="SplatIm — Photo and Video to Gaussian Splat") as demo:
     with gr.Tabs():
         with gr.Tab("Video → selected subject"):
             video_subject_state = gr.State({})
+            # Submit the displayed frame identity with its editor payload, rather
+            # than resolving a potentially newer server-side State on a queued event.
+            target_context = gr.JSON(value={}, visible=False)
             gr.Markdown(
                 "Use this for an **orbit video of a mostly stationary person or object**. The workflow is "
                 "intentionally staged: you choose the target with a brush, inspect every propagated mask, "
@@ -402,6 +420,10 @@ with gr.Blocks(title="SplatIm — Photo and Video to Gaussian Splat") as demo:
                                 label="Reconstruction / training quality",
                             )
                             prepare_subject = gr.Button("Prepare and align video", variant="primary")
+                            prepared_jobs = gr.Dropdown(prepared_job_choices(), label="Resume a prepared video")
+                            with gr.Row():
+                                refresh_prepared = gr.Button("Refresh prepared videos")
+                                resume_subject = gr.Button("Resume saved frames + keyframes")
                         with gr.Column(scale=2):
                             prepare_board = gr.Markdown(PREPARE_PANEL)
                     prepare_status = gr.Markdown(
@@ -424,10 +446,10 @@ with gr.Blocks(title="SplatIm — Photo and Video to Gaussian Splat") as demo:
                         "It is expected to look hard around hair and fabric; the next stage creates the soft alpha matte."
                     )
                     with gr.Row():
-                        with gr.Column(scale=3):
+                        with gr.Column(scale=3, elem_id="subject-selection"):
                             target_frame = gr.Slider(
                                 0, 1, value=0, step=1, label="Prompt / correction frame",
-                                info="Move to any registered frame, then paint or correct the target mask.",
+                                info="Edits save when you switch frames. All saved keyframes guide the next propagation.",
                             )
                             target_editor = gr.ImageEditor(
                                 label="Roto-style target brush (red overlay = selected)",
@@ -435,15 +457,23 @@ with gr.Blocks(title="SplatIm — Photo and Video to Gaussian Splat") as demo:
                                 brush=gr.Brush(default_size=32, colors=["#ff3355"], default_color="#ff3355", color_mode="fixed"),
                                 eraser=gr.Eraser(default_size=40),
                                 layers=gr.LayerOptions(allow_additional_layers=False, layers=["Target mask"]),
-                                transforms=(), fixed_canvas=True,
+                                transforms=(), fixed_canvas=False, format="png", sources=(),
                             )
+                            target_preprocess = target_editor.preprocess
+                            target_editor.preprocess = lambda payload: preprocess_editor_safely(target_preprocess, payload)
                             target_note = gr.Markdown("Prepare the video to load a selectable frame.")
-                            track_subject = gr.Button("Propagate selection with SAM 2.1", variant="primary")
+                            with gr.Row():
+                                save_target = gr.Button("Save keyframe")
+                                forget_target = gr.Button("Remove this keyframe")
+                            keyframe_status = gr.Markdown("No saved keyframes.")
+                            track_subject = gr.Button("Propagate all saved keyframes with SAM 2.1", variant="primary")
                         with gr.Column(scale=2):
                             sam_board = gr.Markdown(SAM_PANEL)
                             gr.Markdown(
                                 "Paint inside the wanted person or object. After tracking, choose a bad frame "
-                                "with the slider, erase false areas or paint missing areas, then propagate again."
+                                "with the slider, erase false areas or paint missing areas. Edits are saved when "
+                                "switching frames or propagating. Save keyframe also pins an unchanged prediction. "
+                                "All saved keyframes are used together; visiting a frame alone does not pin it."
                             )
                             sam_run_log = gr.File(label="SAM 2.1 run log", interactive=False)
                             sam_live_log = gr.Textbox(
@@ -464,8 +494,10 @@ with gr.Blocks(title="SplatIm — Photo and Video to Gaussian Splat") as demo:
 
                 with gr.Tab("3 · Refine matte"):
                     gr.Markdown(
-                        "MatAnyone2 converts the tracked identity mask into a soft alpha matte. Inspect hair, "
-                        "hands, gaps between limbs, clothing edges, and any background that remains attached."
+                        "MatAnyone2 creates soft alpha from **frame zero's mask only** in the current integration. "
+                        "It does **not** enforce your later saved keyframes. To keep the corrected SAM sequence, "
+                        "skip this optional stage and train after tracking. If you refine, inspect every result; "
+                        "refinement switches the active training masks to MatAnyone2."
                     )
                     with gr.Row():
                         refine_subject = gr.Button("Refine masks with MatAnyone2", variant="primary")
@@ -576,17 +608,43 @@ with gr.Blocks(title="SplatIm — Photo and Video to Gaussian Splat") as demo:
                 [video_subject_state, target_frame, target_editor, aligned_gallery,
                  prepare_status, prepare_board, prepare_run_log, prepare_live_log],
                 concurrency_id="gpu", concurrency_limit=1, show_progress="minimal", show_progress_on=prepare_board,
-            )
-            target_frame.release(
-                load_target_frame, [video_subject_state, target_frame],
-                [target_editor, target_note], queue=False, show_progress="hidden",
-            )
+            ).then(load_target_frame, [video_subject_state, target_frame],
+                   [target_editor, target_note, target_context, keyframe_status],
+                   concurrency_id="gpu", concurrency_limit=1, show_progress="hidden")
+            refresh_prepared.click(lambda: gr.update(choices=prepared_job_choices()),
+                                   outputs=prepared_jobs, queue=False, show_progress="hidden")
+            resume_subject.click(resume_prepared_video, [prepared_jobs],
+                [video_subject_state, target_frame, target_editor, aligned_gallery,
+                 prepare_status, prepare_board, prepare_run_log, prepare_live_log, subject_quality],
+                concurrency_id="gpu", concurrency_limit=1, show_progress="minimal", show_progress_on=prepare_board,
+            ).then(load_target_frame, [video_subject_state, target_frame],
+                   [target_editor, target_note, target_context, keyframe_status],
+                   concurrency_id="gpu", concurrency_limit=1, show_progress="hidden")
+            target_frame.input(
+                switch_target_frame, [video_subject_state, target_frame, target_editor, target_context],
+                [target_editor, target_note, target_context, keyframe_status],
+                concurrency_id="gpu", concurrency_limit=1, show_progress="hidden", js=LOCK_SELECTION,
+            ).then(lambda: None, js=UNLOCK_SELECTION, queue=False, show_progress="hidden")
+            save_target.click(save_target_keyframe, [video_subject_state, target_editor, target_context],
+                              [target_context, keyframe_status], concurrency_id="gpu",
+                              concurrency_limit=1, show_progress="hidden", js=LOCK_SELECTION
+            ).then(lambda: None, js=UNLOCK_SELECTION, queue=False, show_progress="hidden")
+            forget_target.click(forget_target_keyframe,
+                                [video_subject_state, target_frame, target_editor, target_context],
+                                [target_editor, target_note, target_context, keyframe_status],
+                                concurrency_id="gpu", concurrency_limit=1, show_progress="hidden", js=LOCK_SELECTION
+            ).then(lambda: None, js=UNLOCK_SELECTION, queue=False, show_progress="hidden")
             track_subject.click(
-                track_subject_live, [video_subject_state, target_frame, target_editor],
+                track_subject_live, [video_subject_state, target_frame, target_editor, target_context],
                 [video_subject_state, sam_overlay_gallery, sam_mask_gallery, sam_status,
                  sam_board, sam_run_log, sam_live_log],
                 concurrency_id="gpu", concurrency_limit=1, show_progress="minimal", show_progress_on=sam_board,
-            )
+                js=LOCK_SELECTION,
+            ).then(load_target_frame, [video_subject_state, target_frame],
+                   [target_editor, target_note, target_context, keyframe_status],
+                   concurrency_id="gpu", concurrency_limit=1, show_progress="hidden"
+            ).then(lambda: None, js=UNLOCK_SELECTION,
+                   queue=False, show_progress="hidden")
             refine_subject.click(
                 refine_subject_live, [video_subject_state],
                 [video_subject_state, refined_overlay_gallery, refined_mask_gallery,

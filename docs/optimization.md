@@ -10,7 +10,23 @@
 - Logs are read as they grow. Old run counters are excluded.
 - Completed or failed jobs clear the activity bar. A disconnected browser cannot cause two adapter workers to run backend stages concurrently.
 
-The processing implementation in `VideoSubjectSplat.py`, its model commands, and `work/h2_extract.py` are unchanged by this work.
+The progress-display change does not alter model commands or extraction. The later accumulated-keyframe fix below changes how the selection workflow stores and supplies SAM prompts.
+
+## Accumulated selection corrections
+
+In **2 · Select + track**, edited frames save when you switch frames or propagate. **Save keyframe** also pins an unchanged prediction. The panel lists saved frames and the frames used by the last successful propagation. Simply viewing an unedited frame does not add a constraint.
+
+All saved prompts are registered in one fresh SAM inference state before tracking. Interior strokes remain positive-point prompts; edits to a predicted silhouette become full-mask prompts. Full-mask corrections are preserved exactly on their authored frames, including empty masks marking an absent/occluded target. This does not guarantee perfect tracking between keyframes.
+
+Keyframes persist in `subject-keyframes/manifest.json` with separate PNG revisions, independently of generated `sam2_raw` masks. Removing a keyframe removes its active manifest entry but keeps its previous PNG revisions on disk. `sam2-keyframes-used.json` records the frames and revision used. Pending saved changes block training/refinement until propagation runs again.
+
+The editor uses the source frame's aspect ratio and native canvas size, with PNG transport. Frame changes work through mouse, keyboard, and number input. The displayed frame identity travels with the editor payload so queued actions cannot silently relabel a prior frame's brush strokes.
+
+After a page reload, use **1 · Prepare → Resume a prepared video → Resume saved frames + keyframes** to continue without rerunning camera alignment. Legacy `prompt-frame-*.png` debug files are not automatically imported: older runs did not reliably record accumulated keyframes or recover unsaved strokes.
+
+**MatAnyone2 limitation:** the optional refinement integration still seeds from frame zero only; it does not enforce later corrected keyframes. To train using the corrected SAM mask sequence, skip refinement. This change does not add SeC or change the matting model.
+
+Checks include persistence across six frame edits, prompt-mode retention, absent-target masks, wrong-frame rejection, exact authored-mask preservation, stale-sequence protection, and resuming. `tests/keyframe_smoke.py <job>` runs actual SAM on a temporary eight-frame copy with six keyframes; `--serve` exposes the full app as an isolated browser test on port 7872. Neither modifies the source job.
 
 ## Optional uncertain-splat recovery
 
