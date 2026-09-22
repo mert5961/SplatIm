@@ -151,12 +151,87 @@ def require_applied_keyframes(job):
         raise ValueError("Saved keyframes changed. Propagate all saved keyframes in Select + track before continuing.")
 
 
+def _mask_from_sam_result(result, expected_shape):
+    if not result or len(result) < 3:
+        return None
+    logits = result[2]
+    try:
+        prediction = logits[0, 0] > 0
+        if hasattr(prediction, "detach"):
+            prediction = prediction.detach()
+        if hasattr(prediction, "cpu"):
+            prediction = prediction.cpu()
+        prediction = np.asarray(prediction, dtype=bool)
+    except (IndexError, TypeError, ValueError):
+        return None
+    if prediction.shape != tuple(expected_shape):
+        prediction = np.asarray(
+            Image.fromarray(prediction.astype(np.uint8) * 255).resize(
+                (expected_shape[1], expected_shape[0]), Image.Resampling.NEAREST
+            )
+        ) > 127
+    return prediction
+
+
+def _prompt_scores(selection, prediction):
+    selection = np.asarray(selection, dtype=bool)
+    prediction = np.asarray(prediction, dtype=bool)
+    intersection = int(np.logical_and(selection, prediction).sum())
+    union = int(np.logical_or(selection, prediction).sum())
+    inverse = np.logical_not(selection)
+    inverse_union = int(np.logical_or(inverse, prediction).sum())
+    return {
+        "selection_coverage": float(selection.mean()),
+        "prediction_coverage": float(prediction.mean()),
+        "iou": intersection / max(1, union),
+        "selection_recall": intersection / max(1, int(selection.sum())),
+        "complement_iou": int(np.logical_and(inverse, prediction).sum()) / max(1, inverse_union),
+    }
+
+
 def register_keyframes(predictor, inference, prompts, points_from_brush):
-    """Register every prompt in the same fresh inference state, before propagation."""
+    """Register and validate every prompt before propagation begins.
+
+    A dense painted selection is effectively an authored mask. If SAM interprets
+    its positive points as the complement/background, replace that prompt with
+    the saved mask in the same inference state. Sparse interior strokes cannot
+    safely be promoted to full masks, so reject a contradictory SAM result.
+    """
+    diagnostics = []
+    fallback_frames = []
     for index, mode, mask in prompts:
+        mask = np.asarray(mask, dtype=bool)
         if mode == "mask":
             predictor.add_new_mask(inference_state=inference, frame_idx=index, obj_id=1, mask=mask)
-        else:
-            points = points_from_brush(mask)
-            predictor.add_new_points_or_box(inference_state=inference, frame_idx=index, obj_id=1,
-                                            points=points, labels=np.ones(len(points), dtype=np.int32))
+            diagnostics.append({"frame": index, "mode": mode, "decision": "exact mask"})
+            continue
+
+        points = points_from_brush(mask)
+        result = predictor.add_new_points_or_box(
+            inference_state=inference, frame_idx=index, obj_id=1,
+            points=points, labels=np.ones(len(points), dtype=np.int32)
+        )
+        prediction = _mask_from_sam_result(result, mask.shape)
+        if prediction is None:
+            raise ValueError(f"SAM did not return a prompt-frame mask for F{index:03d}; propagation was stopped.")
+        scores = _prompt_scores(mask, prediction)
+        dense_selection = scores["selection_coverage"] >= 0.08
+        contradictory = (
+            scores["selection_recall"] < 0.75
+            or scores["complement_iou"] > scores["iou"]
+            or (dense_selection and scores["iou"] < 0.45)
+        )
+        decision = "accepted"
+        if contradictory:
+            if not dense_selection:
+                raise ValueError(
+                    f"SAM rejected the sparse selection on F{index:03d} "
+                    f"(paint recall {scores['selection_recall']:.1%}). Paint a fuller target selection "
+                    "or correct this frame from an existing tracked mask, then propagate again."
+                )
+            # add_new_mask replaces the point input on this frame in SAM's state.
+            predictor.add_new_mask(inference_state=inference, frame_idx=index, obj_id=1, mask=mask)
+            fallback_frames.append(index)
+            decision = "exact-mask fallback"
+        diagnostics.append({"frame": index, "mode": mode, "decision": decision, **scores})
+    return {"frames": diagnostics, "fallback_frames": fallback_frames}

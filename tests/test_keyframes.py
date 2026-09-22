@@ -18,7 +18,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "outputs"))
 import VideoSubjectSplat as pipeline
 from SubjectKeyframes import (read_keyframes, load_keyframe_prompts, keyframe_summary,
                               save_keyframe, remove_keyframe, require_applied_keyframes,
-                              preprocess_editor_safely, install_resilient_image_editor)
+                              preprocess_editor_safely, install_resilient_image_editor,
+                              register_keyframes)
 
 
 class KeyframeTests(unittest.TestCase):
@@ -150,6 +151,8 @@ class KeyframeTests(unittest.TestCase):
 
             def add_new_points_or_box(inner, **kwargs):
                 calls.append((kwargs["frame_idx"], "points"))
+                logits = torch.from_numpy(self.mask.astype(np.float32) * 2 - 1)[None, None]
+                return kwargs["frame_idx"], [1], logits
 
             def add_new_mask(inner, **kwargs):
                 calls.append((kwargs["frame_idx"], "mask"))
@@ -180,6 +183,28 @@ class KeyframeTests(unittest.TestCase):
         remove_keyframe(self.job, 2)
         with self.assertRaises(ValueError):
             require_applied_keyframes(self.job)
+
+    def test_inverted_dense_prompt_falls_back_to_saved_mask_before_propagation(self):
+        import torch
+        calls = []
+
+        class Predictor:
+            def add_new_points_or_box(inner, **kwargs):
+                calls.append(("points", kwargs["frame_idx"]))
+                inverted = np.logical_not(self.mask)
+                logits = torch.from_numpy(inverted.astype(np.float32) * 2 - 1)[None, None]
+                return kwargs["frame_idx"], [1], logits
+
+            def add_new_mask(inner, **kwargs):
+                calls.append(("mask", kwargs["frame_idx"]))
+
+        report = register_keyframes(
+            Predictor(), {}, [(4, "points", self.mask)], pipeline._positive_points_from_brush
+        )
+        self.assertEqual(calls, [("points", 4), ("mask", 4)])
+        self.assertEqual(report["fallback_frames"], [4])
+        self.assertEqual(report["frames"][0]["decision"], "exact-mask fallback")
+        self.assertGreater(report["frames"][0]["complement_iou"], report["frames"][0]["iou"])
 
 
 if __name__ == "__main__":

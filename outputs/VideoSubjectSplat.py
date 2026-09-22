@@ -505,7 +505,22 @@ def run_sam2(state: dict | None, frame_index: int, editor: dict | None, context:
     tracked: dict[int, np.ndarray] = {}
     with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
         inference = predictor.init_state(video_path=str(job / "sam2_frames"))
-        register_keyframes(predictor, inference, prompts, _positive_points_from_brush)
+        validation = register_keyframes(predictor, inference, prompts, _positive_points_from_brush)
+        fallback_frames = set(validation["fallback_frames"])
+        validation_lines = []
+        for row in validation["frames"]:
+            if row["mode"] == "mask":
+                validation_lines.append(f"F{row['frame']:03d}: exact saved mask")
+            else:
+                validation_lines.append(
+                    f"F{row['frame']:03d}: {row['decision']}; IoU={row['iou']:.3f}, "
+                    f"paint recall={row['selection_recall']:.3f}, "
+                    f"complement IoU={row['complement_iou']:.3f}"
+                )
+        _append_log(
+            _log_path(state),
+            "Prompt-frame validation completed before propagation:\n" + "\n".join(validation_lines),
+        )
         for reverse in (False, True):
             direction = "backward" if reverse else "forward"
             for frame_id, _object_ids, logits in predictor.propagate_in_video(
@@ -518,9 +533,10 @@ def run_sam2(state: dict | None, frame_index: int, editor: dict | None, context:
 
     if len(tracked) != len(frames):
         raise gr.Error(f"SAM 2.1 returned {len(tracked)}/{len(frames)} frame masks.")
-    # Explicit full-mask corrections remain exact at their authored frames.
+    # Explicit corrections and rejected/inverted point prompts remain exact at
+    # their authored frames, matching what the user approved in the editor.
     for index, mode, mask in prompts:
-        if mode == "mask":
+        if mode == "mask" or index in fallback_frames:
             tracked[index] = mask
     raw.mkdir(exist_ok=True)
     for frame_id, mask in tracked.items():
@@ -532,10 +548,15 @@ def run_sam2(state: dict | None, frame_index: int, editor: dict | None, context:
     state.update({"mask_source": "sam2", "mask_dir": str(raw), "complete_stage": 4})
     (job / "job.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
     _append_log(_log_path(state), json.dumps({key: value for key, value in report.items() if key != "per_frame"}))
+    fallback_note = (
+        f" Prompt validation replaced {len(fallback_frames)} contradictory frame(s) with their exact saved "
+        f"selection: {', '.join(f'F{index:03d}' for index in sorted(fallback_frames))}."
+        if fallback_frames else " All prompt-frame outputs agreed with their saved selections."
+    )
     status = (
         f"**SAM 2.1 tracked {len(tracked)} frames using all {len(prompts)} saved keyframes.** Mean selected area: "
         f"**{report['mean_coverage']:.1%}**; large centroid jumps: "
-        f"**{report['large_centroid_jumps']}**. Inspect every overlay. To fix a frame, "
+        f"**{report['large_centroid_jumps']}**.{fallback_note} Inspect every overlay. To fix a frame, "
         "move the frame slider, erase/add paint on the red layer, and run SAM 2.1 again."
     )
     return state, overlays, masks, status, _stage_panel(
