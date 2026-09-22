@@ -206,6 +206,52 @@ class KeyframeTests(unittest.TestCase):
         self.assertEqual(report["frames"][0]["decision"], "exact-mask fallback")
         self.assertGreater(report["frames"][0]["complement_iou"], report["frames"][0]["iou"])
 
+    def test_matanyone_quality_gate_rejects_collapse_and_accepts_stable_refinement(self):
+        source = {
+            "mean_coverage": 0.09,
+            "large_centroid_jumps": 0,
+            "per_frame": [{"frame": index, "coverage": 0.09} for index in range(20)],
+        }
+        collapsed = {
+            "mean_coverage": 0.011,
+            "large_centroid_jumps": 9,
+            "per_frame": [{"frame": index, "coverage": 0.001} for index in range(20)],
+        }
+        rejected = pipeline._matanyone_quality_gate(source, collapsed)
+        self.assertFalse(rejected["accepted"])
+        self.assertEqual(len(rejected["collapsed_frames"]), 20)
+        self.assertGreaterEqual(len(rejected["reasons"]), 2)
+
+        stable = {
+            "mean_coverage": 0.082,
+            "large_centroid_jumps": 2,
+            "per_frame": [{"frame": index, "coverage": 0.082} for index in range(20)],
+        }
+        accepted = pipeline._matanyone_quality_gate(source, stable)
+        self.assertTrue(accepted["accepted"])
+        self.assertEqual(accepted["reasons"], [])
+
+    def test_resumed_collapsed_matanyone_job_falls_back_to_sam_before_training(self):
+        sam_report = {
+            "mean_coverage": 0.1,
+            "per_frame": [{"frame": index, "coverage": 0.1} for index in range(8)],
+        }
+        refined_report = {
+            "mean_coverage": 0.005,
+            "large_centroid_jumps": 6,
+            "per_frame": [{"frame": index, "coverage": 0.001} for index in range(8)],
+        }
+        (self.job / "sam2_raw").mkdir()
+        (self.job / "sam2-mask-report.json").write_text(json.dumps(sam_report))
+        (self.job / "matanyone2-mask-report.json").write_text(json.dumps(refined_report))
+        state = dict(self.state, mask_source="matanyone2",
+                     mask_dir=str(self.job / "matanyone2_masks"), raw_splat="old.ply")
+        fallback, quality = pipeline._reject_stale_matanyone_source(state)
+        self.assertFalse(quality["accepted"])
+        self.assertEqual(fallback["mask_source"], "sam2")
+        self.assertEqual(Path(fallback["mask_dir"]), self.job / "sam2_raw")
+        self.assertNotIn("raw_splat", fallback)
+
 
 if __name__ == "__main__":
     unittest.main()

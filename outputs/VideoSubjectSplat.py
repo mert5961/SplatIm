@@ -97,7 +97,7 @@ def _board(active: int, *, failed: int | None = None, complete: int = -1) -> str
 
 
 def _stage_panel(title: str, state: str, detail: str = "") -> str:
-    icons = {"waiting": "⬜", "running": "🔄", "complete": "✅", "failed": "❌"}
+    icons = {"waiting": "⬜", "running": "🔄", "complete": "✅", "failed": "❌", "rejected": "🛡️"}
     suffix = f"\n\n{detail}" if detail else ""
     return f"### {title}\n\n{icons[state]} **{state.capitalize()}**{suffix}"
 
@@ -471,6 +471,82 @@ def _mask_debug_outputs(state: dict, mask_dir: Path, tag: str) -> tuple[list, li
     return overlays, masks, report
 
 
+def _matanyone_quality_gate(source_report: dict, refined_report: dict) -> dict:
+    """Decide whether a refinement is safe enough to replace the SAM masks."""
+    source_rows = {int(row["frame"]): row for row in source_report.get("per_frame", [])}
+    refined_rows = {int(row["frame"]): row for row in refined_report.get("per_frame", [])}
+    comparable = sorted(set(source_rows) & set(refined_rows))
+    eligible = [
+        index for index in comparable
+        if float(source_rows[index].get("coverage", 0.0)) >= 0.002
+    ]
+    collapsed = [
+        index for index in eligible
+        if float(refined_rows[index].get("coverage", 0.0))
+        < float(source_rows[index].get("coverage", 0.0)) * 0.35
+    ]
+    source_mean = float(source_report.get("mean_coverage", 0.0))
+    refined_mean = float(refined_report.get("mean_coverage", 0.0))
+    coverage_ratio = refined_mean / max(source_mean, 1e-9)
+    collapsed_fraction = len(collapsed) / max(1, len(eligible))
+    jumps = int(refined_report.get("large_centroid_jumps", 0))
+    jump_limit = max(5, int(np.ceil(max(1, len(comparable)) * 0.20)))
+    reasons = []
+    if coverage_ratio < 0.55:
+        reasons.append(
+            f"mean mask coverage retained only {coverage_ratio:.1%} of SAM "
+            f"({source_mean:.1%} → {refined_mean:.1%})"
+        )
+    if collapsed_fraction > 0.25:
+        reasons.append(
+            f"{len(collapsed)}/{len(eligible)} tracked frames collapsed below 35% of their SAM area"
+        )
+    if jumps > jump_limit:
+        reasons.append(f"{jumps} centroid jumps exceeded the safety limit of {jump_limit}")
+    return {
+        "accepted": not reasons,
+        "source_mean_coverage": source_mean,
+        "refined_mean_coverage": refined_mean,
+        "coverage_retained": coverage_ratio,
+        "comparable_frames": len(comparable),
+        "eligible_frames": len(eligible),
+        "collapsed_frames": collapsed,
+        "collapsed_fraction": collapsed_fraction,
+        "large_centroid_jumps": jumps,
+        "centroid_jump_limit": jump_limit,
+        "reasons": reasons,
+    }
+
+
+def _reject_stale_matanyone_source(state: dict) -> tuple[dict, dict | None]:
+    """Recheck resumed pre-gate jobs before their masks reach training."""
+    if state.get("mask_source") != "matanyone2":
+        return state, None
+    job = Path(state["job"])
+    sam_report = job / "sam2-mask-report.json"
+    refined_report = job / "matanyone2-mask-report.json"
+    if not sam_report.is_file() or not refined_report.is_file():
+        raise gr.Error("This MatAnyone2 result predates quality diagnostics. Rerun Refine matte before training.")
+    quality = _matanyone_quality_gate(
+        json.loads(sam_report.read_text(encoding="utf-8")),
+        json.loads(refined_report.read_text(encoding="utf-8")),
+    )
+    if quality["accepted"]:
+        return state, quality
+    state = dict(state)
+    state.pop("raw_splat", None)
+    state.update({"mask_source": "sam2", "mask_dir": str(job / "sam2_raw"), "complete_stage": 4})
+    (job / "matanyone2-quality-report.json").write_text(
+        json.dumps(quality, indent=2), encoding="utf-8"
+    )
+    (job / "job.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
+    _append_log(
+        _log_path(state),
+        "MATANYONE2 QUALITY GATE: REJECTED BEFORE TRAINING\n" + json.dumps(quality, indent=2),
+    )
+    return state, quality
+
+
 def run_sam2(state: dict | None, frame_index: int, editor: dict | None, context: dict, progress=gr.Progress()):
     """Save current edits and use every persistent keyframe in one tracking session."""
     if not state or not state.get("frames"):
@@ -574,7 +650,9 @@ def refine_matanyone2(state: dict | None, progress=gr.Progress()):
         if not required.exists():
             raise gr.Error(f"MatAnyone2 dependency is missing: {required}")
     job = Path(state["job"])
-    raw = Path(state["mask_dir"])
+    # MatAnyone2 is always evaluated against the complete validated SAM
+    # sequence, even when a resumed job previously activated a refinement.
+    raw = job / "sam2_raw"
     seed = raw / "00000.png"
     if not seed.is_file():
         raise gr.Error("SAM 2.1 did not produce a frame-zero mask for MatAnyone2.")
@@ -609,9 +687,42 @@ def refine_matanyone2(state: dict | None, progress=gr.Progress()):
             matte = matte.resize(size, Image.Resampling.BILINEAR)
         matte.save(refined / f"{index:05d}.png")
     overlays, masks, report = _mask_debug_outputs(state, refined, "matanyone2")
+    source_report_path = job / "sam2-mask-report.json"
+    if source_report_path.is_file():
+        source_report = json.loads(source_report_path.read_text(encoding="utf-8"))
+    else:
+        _, _, source_report = _mask_debug_outputs(state, raw, "sam2")
+    quality = _matanyone_quality_gate(source_report, report)
+    (job / "matanyone2-quality-report.json").write_text(
+        json.dumps(quality, indent=2), encoding="utf-8"
+    )
     state = dict(state)
+    state.pop("raw_splat", None)
+    if not quality["accepted"]:
+        state.update({"mask_source": "sam2", "mask_dir": str(raw), "complete_stage": 4})
+        (job / "job.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
+        explanation = "; ".join(quality["reasons"])
+        _append_log(
+            _log_path(state),
+            "MATANYONE2 QUALITY GATE: REJECTED\n" + json.dumps(quality, indent=2),
+        )
+        progress(1, desc="MatAnyone2 rejected; SAM masks remain active")
+        status = (
+            f"**MatAnyone2 was automatically rejected:** {explanation}. "
+            "The generated mattes remain visible here for debugging, but validated **SAM 2.1 masks remain "
+            "the active training source**. You can safely continue to Train."
+        )
+        return state, overlays, masks, status, _stage_panel(
+            "MatAnyone2 alpha refinement", "rejected",
+            "Quality gate blocked collapsed mattes; SAM 2.1 remains active.",
+        ), str(_log_path(state)), _tail(_log_path(state))
+
     state.update({"mask_source": "matanyone2", "mask_dir": str(refined), "complete_stage": 5})
     (job / "job.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
+    _append_log(
+        _log_path(state),
+        "MATANYONE2 QUALITY GATE: ACCEPTED\n" + json.dumps(quality, indent=2),
+    )
     progress(1, desc="MatAnyone2 masks ready")
     status = (
         f"**MatAnyone2 refined {len(frames)} masks.** Mean selected area: "
@@ -649,6 +760,7 @@ def train_masked_splat(state: dict | None, quality: str, progress=gr.Progress())
     """Train Brush with the reviewed per-view masks."""
     if not state or not state.get("mask_dir"):
         raise gr.Error("Review a SAM 2.1 or MatAnyone2 mask sequence first.")
+    state, rejected_quality = _reject_stale_matanyone_source(state)
     require_applied_keyframes(state["job"])
     if quality != state.get("quality"):
         raise gr.Error(
@@ -679,6 +791,8 @@ def train_masked_splat(state: dict | None, quality: str, progress=gr.Progress())
             "This is an intermediate full scene; masked training can still leave hidden background "
             "Gaussians. Run the extraction stage to create the subject-only PLY."
         )
+        if rejected_quality and not rejected_quality["accepted"]:
+            status += " MatAnyone2 failed its quality gate, so this training run automatically used SAM masks."
         return state, str(result), status, _stage_panel(
             "Brush masked training", "complete", f"{count:,} Gaussians exported."
         ), str(_log_path(state)), _tail(_log_path(state))
@@ -691,7 +805,19 @@ def train_masked_splat(state: dict | None, quality: str, progress=gr.Progress())
 
 def extract_subject_splat(state: dict | None, progress=gr.Progress()):
     """Classify trained Gaussians using mask evidence from every camera view."""
-    if not state or not state.get("raw_splat"):
+    if not state:
+        raise gr.Error("Train the masked splat first.")
+    state, rejected_quality = _reject_stale_matanyone_source(state)
+    if rejected_quality and not rejected_quality["accepted"]:
+        reason = "; ".join(rejected_quality["reasons"])
+        return state, None, None, None, (
+            f"**Extraction blocked:** MatAnyone2 failed its quality gate ({reason}). "
+            "SAM masks are active again; rerun Train before extraction."
+        ), _stage_panel(
+            "Mask-guided Gaussian extraction", "failed",
+            "Collapsed MatAnyone2 masks were rejected; retraining with SAM masks is required.",
+        ), None, str(_log_path(state)), _tail(_log_path(state))
+    if not state.get("raw_splat"):
         raise gr.Error("Train the masked splat first.")
     job = Path(state["job"])
     raw_splat = Path(state["raw_splat"])
