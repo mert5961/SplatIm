@@ -4,52 +4,58 @@ import sys
 import tempfile
 import types
 import unittest
+from io import BytesIO
 from contextlib import nullcontext
 from pathlib import Path
 from unittest.mock import patch, Mock
 
 import numpy as np
 from PIL import Image
-import gradio as gr
-from gradio.components.image_editor import EditorData
+from gradio.components.image_editor import EditorData, ImageEditor
 from gradio.data_classes import FileData
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "outputs"))
 import VideoSubjectSplat as pipeline
 from SubjectKeyframes import (read_keyframes, load_keyframe_prompts, keyframe_summary,
                               save_keyframe, remove_keyframe, require_applied_keyframes,
-                              preprocess_editor_safely)
+                              preprocess_editor_safely, install_resilient_image_editor)
 
 
 class KeyframeTests(unittest.TestCase):
     def test_editor_cache_retry_is_bounded_and_does_not_swallow_failure(self):
         component = Mock()
-        component.preprocess_original = Mock(side_effect=[SyntaxError("broken PNG chunk"), {"layers": []}])
+        decoder = Mock(side_effect=[SyntaxError("broken PNG chunk"), {"layers": []}])
         with patch("SubjectKeyframes.time.sleep"):
-            self.assertEqual(preprocess_editor_safely(component, Mock(id=None)), {"layers": []})
+            self.assertEqual(preprocess_editor_safely(component, Mock(id=None), decoder), {"layers": []})
             broken = Mock()
-            broken.preprocess_original = Mock(side_effect=SyntaxError("invalid image"))
+            broken_decoder = Mock(side_effect=SyntaxError("invalid image"))
             broken.blob_storage = {}
             broken.convert_and_format_image = Mock(side_effect=SyntaxError("invalid layer"))
             with self.assertRaises(SyntaxError):
-                preprocess_editor_safely(broken, Mock(id=None, layers=[object()]))
-            self.assertEqual(broken.preprocess_original.call_count, 5)
+                preprocess_editor_safely(broken, Mock(id=None, layers=[object()]), broken_decoder)
+            self.assertEqual(broken_decoder.call_count, 5)
 
     def test_corrupt_canvas_background_keeps_valid_brush_layer(self):
         with tempfile.TemporaryDirectory() as folder, patch("SubjectKeyframes.time.sleep"):
             folder = Path(folder)
             background = folder / "broken.png"
-            background.write_bytes(b"not a png")
+            Image.new("RGB", (120, 90), "green").save(background)
+            complete_png = background.read_bytes()
+            background.write_bytes(complete_png[:len(complete_png) // 2])
             layer = folder / "layer.png"
             rgba = np.zeros((12, 9, 4), dtype=np.uint8)
             rgba[2:8, 3:7, 3] = 255
             Image.fromarray(rgba).save(layer)
-            component = gr.ImageEditor(type="numpy", image_mode="RGBA", format="png")
-            component.preprocess_original = component.preprocess
+            install_resilient_image_editor()
+            component = ImageEditor(type="numpy", image_mode="RGBA", format="png")
             payload = EditorData(background=FileData(path=str(background)),
                                  layers=[FileData(path=str(layer))])
-            result = preprocess_editor_safely(component, payload)
+            with self.assertRaisesRegex(OSError, "truncated"):
+                with Image.open(BytesIO(background.read_bytes())) as truncated:
+                    truncated.convert("RGBA")
+            result = component.preprocess(payload)
             self.assertIsNone(result["background"])
+            self.assertTrue(getattr(component.preprocess, "_splatim_resilient", False))
             np.testing.assert_array_equal(result["layers"][0][..., 3] > 0, rgba[..., 3] > 0)
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory()

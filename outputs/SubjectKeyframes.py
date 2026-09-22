@@ -10,15 +10,20 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
+from gradio.components.image_editor import ImageEditor
+from gradio.data_classes import FileData
 
 
-def preprocess_editor_safely(component, payload):
+IMAGE_DECODE_ERRORS = (OSError, SyntaxError)
+
+
+def preprocess_editor_safely(component, payload, preprocess):
     # Gradio may read an image while a concurrent canvas upload replaces the
     # same cache file. Retry only image decoding/I/O failures, with a bounded wait.
     for attempt in range(5):
         try:
-            return component.preprocess_original(payload)
-        except (OSError, SyntaxError) as error:
+            return preprocess(payload)
+        except IMAGE_DECODE_ERRORS as error:
             if attempt == 4:
                 original_error = error
                 break
@@ -27,15 +32,45 @@ def preprocess_editor_safely(component, payload):
     # transient background must not discard a valid brush layer: the source
     # frame is already identified by the submitted keyframe context.
     source = component.blob_storage.get(payload.id) if payload.id else payload
+    source = source or payload
     if source is None:
         raise original_error
-    try:
-        layers = [component.convert_and_format_image(layer) for layer in source.layers]
-    except (OSError, SyntaxError):
-        raise original_error
+    for attempt in range(5):
+        try:
+            layers = [component.convert_and_format_image(layer) for layer in source.layers]
+            break
+        except IMAGE_DECODE_ERRORS:
+            if attempt == 4:
+                raise
+            time.sleep(.1)
     if payload.id:
         component.blob_storage.pop(payload.id, None)
     return {"background": None, "layers": layers, "composite": None}
+
+
+def install_resilient_image_editor():
+    """Patch Gradio's decoder class before events capture their input components."""
+    if getattr(ImageEditor.preprocess, "_splatim_resilient", False):
+        return
+    original_preprocess = ImageEditor.preprocess
+    original_convert = ImageEditor.convert_and_format_image
+
+    def convert_from_snapshot(component, file):
+        # Decode a memory snapshot instead of leaving Pillow attached to the
+        # browser cache path. On Windows a failed PNG decode otherwise keeps
+        # the still-growing file locked and prevents the upload from finishing.
+        if isinstance(file, FileData):
+            file = Path(file.path).read_bytes()
+        return original_convert(component, file)
+
+    def preprocess_resiliently(component, payload):
+        return preprocess_editor_safely(
+            component, payload, lambda submitted: original_preprocess(component, submitted)
+        )
+
+    preprocess_resiliently._splatim_resilient = True
+    ImageEditor.convert_and_format_image = convert_from_snapshot
+    ImageEditor.preprocess = preprocess_resiliently
 
 
 def mask_digest(mask):

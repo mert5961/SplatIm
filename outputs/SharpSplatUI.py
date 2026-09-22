@@ -35,7 +35,7 @@ from VideoSubjectSplat import (
 )
 from ProgressUI import CSS as PROGRESS_CSS, present_job
 from SubjectRecovery import export_recovery
-from SubjectKeyframes import preprocess_editor_safely
+from SubjectKeyframes import install_resilient_image_editor
 
 
 APP_DIR = Path(__file__).resolve().parent
@@ -48,6 +48,7 @@ RVM_DIR = TASK_DIR / "work" / "rvm"
 RVM_CHECKPOINT = Path(torch.hub.get_dir()) / "checkpoints" / "rvm_resnet50.pth"
 
 _matting_model = None
+install_resilient_image_editor()
 
 
 def _person_matte(source: Path) -> tuple[Image.Image, np.ndarray]:
@@ -459,8 +460,6 @@ with gr.Blocks(title="SplatIm — Photo and Video to Gaussian Splat") as demo:
                                 layers=gr.LayerOptions(allow_additional_layers=False, layers=["Target mask"]),
                                 transforms=(), fixed_canvas=False, format="png", sources=(),
                             )
-                            target_editor.preprocess_original = target_editor.preprocess
-                            target_editor.preprocess = lambda payload: preprocess_editor_safely(target_editor, payload)
                             target_note = gr.Markdown("Prepare the video to load a selectable frame.")
                             with gr.Row():
                                 save_target = gr.Button("Save keyframe")
