@@ -459,8 +459,8 @@ with gr.Blocks(title="SplatIm — Photo and Video to Gaussian Splat") as demo:
                                 layers=gr.LayerOptions(allow_additional_layers=False, layers=["Target mask"]),
                                 transforms=(), fixed_canvas=False, format="png", sources=(),
                             )
-                            target_preprocess = target_editor.preprocess
-                            target_editor.preprocess = lambda payload: preprocess_editor_safely(target_preprocess, payload)
+                            target_editor.preprocess_original = target_editor.preprocess
+                            target_editor.preprocess = lambda payload: preprocess_editor_safely(target_editor, payload)
                             target_note = gr.Markdown("Prepare the video to load a selectable frame.")
                             with gr.Row():
                                 save_target = gr.Button("Save keyframe")

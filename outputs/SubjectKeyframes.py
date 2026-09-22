@@ -12,16 +12,30 @@ import numpy as np
 from PIL import Image
 
 
-def preprocess_editor_safely(preprocess, payload):
+def preprocess_editor_safely(component, payload):
     # Gradio may read an image while a concurrent canvas upload replaces the
-    # same cache file. Retry only decoding/I/O failures, with a bounded wait.
+    # same cache file. Retry only image decoding/I/O failures, with a bounded wait.
     for attempt in range(5):
         try:
-            return preprocess(payload)
-        except OSError:
+            return component.preprocess_original(payload)
+        except (OSError, SyntaxError) as error:
             if attempt == 4:
-                raise
+                original_error = error
+                break
             time.sleep(.1)
+    # The canvas uploads background and paint layers separately. A corrupt
+    # transient background must not discard a valid brush layer: the source
+    # frame is already identified by the submitted keyframe context.
+    source = component.blob_storage.get(payload.id) if payload.id else payload
+    if source is None:
+        raise original_error
+    try:
+        layers = [component.convert_and_format_image(layer) for layer in source.layers]
+    except (OSError, SyntaxError):
+        raise original_error
+    if payload.id:
+        component.blob_storage.pop(payload.id, None)
+    return {"background": None, "layers": layers, "composite": None}
 
 
 def mask_digest(mask):

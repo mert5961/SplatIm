@@ -312,8 +312,12 @@ def resume_prepared_video(job_name):
 
 
 def _background_matches(editor, frame):
-    if not editor or editor.get("background") is None:
+    if not editor:
         return False
+    # SubjectKeyframes' decoder fallback intentionally drops only a corrupt
+    # browser-cache background. The frame identity still arrives in context.
+    if editor.get("background") is None:
+        return True
     received = np.asarray(editor["background"])[..., :3]
     with Image.open(frame) as image:
         expected = np.asarray(image.convert("RGB"))
