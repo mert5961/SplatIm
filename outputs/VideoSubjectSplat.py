@@ -23,6 +23,9 @@ import numpy as np
 from PIL import Image
 
 from MultiViewSplat import extract_video_frames
+from SubjectKeyframes import (read_keyframes, save_keyframe, remove_keyframe, mask_digest,
+                              load_keyframe_prompts, keyframe_summary, keyframe_revision,
+                              register_keyframes, require_applied_keyframes)
 
 
 APP_DIR = Path(__file__).resolve().parent
@@ -94,7 +97,7 @@ def _board(active: int, *, failed: int | None = None, complete: int = -1) -> str
 
 
 def _stage_panel(title: str, state: str, detail: str = "") -> str:
-    icons = {"waiting": "⬜", "running": "🔄", "complete": "✅", "failed": "❌"}
+    icons = {"waiting": "⬜", "running": "🔄", "complete": "✅", "failed": "❌", "rejected": "🛡️"}
     suffix = f"\n\n{detail}" if detail else ""
     return f"### {title}\n\n{icons[state]} **{state.capitalize()}**{suffix}"
 
@@ -270,24 +273,104 @@ def prepare_video(video: str | None, quality: str, progress=gr.Progress()):
 
 def load_target_frame(state: dict | None, frame_index: int):
     if not state or not state.get("frames"):
-        return None, "Prepare a video first."
+        return None, "Prepare a video first.", {}, "No saved keyframes."
     frames = _frame_paths(state)
     index = max(0, min(int(frame_index), len(frames) - 1))
     raw_mask = Path(state["job"]) / "sam2_raw" / f"{index:05d}.png"
-    editor = _editor_value(frames[index], raw_mask if raw_mask.is_file() else None)
+    saved = read_keyframes(state["job"]).get(str(index))
+    selected = Path(state["job"]) / "subject-keyframes" / saved["file"] if saved else raw_mask
+    editor = _editor_value(frames[index], selected if selected.is_file() else None)
+    mode = saved["mode"] if saved else ("mask" if raw_mask.is_file() else "points")
+    baseline = np.asarray(editor["layers"][0])[..., 3] > 8
+    context = dict(job=state["job"], index=index, mode=mode, digest=mask_digest(baseline))
     note = f"Editing registered frame **{index}/{len(frames) - 1}** (`{frames[index].name}`)."
-    if raw_mask.is_file():
+    if saved:
+        note += " Restored your saved keyframe (" + ("full mask" if mode == "mask" else "interior brush hint") + ")."
+    elif raw_mask.is_file():
         note += " The red layer is SAM 2.1's current mask; erase mistakes or brush missing areas, then propagate again."
     else:
         note += " Paint a rough stroke inside the target."
-    return editor, note
+    note += " Edits save when you switch frames or propagate; use Save keyframe to pin this selection."
+    return editor, note, context, keyframe_summary(state["job"])
 
 
-def _mask_from_editor(editor: dict | None, frame: Path) -> np.ndarray:
+def resume_prepared_video(job_name):
+    job = (JOBS / str(job_name)).resolve()
+    if job.parent != JOBS.resolve() or not (job / "job.json").is_file():
+        raise gr.Error("Choose a prepared video from this app.")
+    state = json.loads((job / "job.json").read_text(encoding="utf-8"))
+    frames = _frame_paths(state)
+    if not frames or not all(frame.is_file() for frame in frames):
+        raise gr.Error("The saved job's prepared frames are missing. Prepare the video again.")
+    state["job"] = str(job)
+    log = _log_path(state)
+    return (state, gr.update(minimum=0, maximum=len(frames)-1, value=0, step=1),
+            _editor_value(frames[0]), _gallery(frames),
+            f"**Resumed {job.name}.** Open Select + track to continue. No alignment or tracking was rerun.",
+            _stage_panel("Prepare + camera alignment", "complete", f"Restored {len(frames)} prepared frames."),
+            str(log) if log.is_file() else None, _tail(log), state.get("quality", "Preview"))
+
+
+def _background_matches(editor, frame):
+    if not editor:
+        return False
+    # SubjectKeyframes' decoder fallback intentionally drops only a corrupt
+    # browser-cache background. The frame identity still arrives in context.
+    if editor.get("background") is None:
+        return True
+    received = np.asarray(editor["background"])[..., :3]
+    with Image.open(frame) as image:
+        expected = np.asarray(image.convert("RGB"))
+    # Browser canvas round-trips can alter a few edge pixels even with PNG.
+    return received.shape == expected.shape and float(np.abs(
+        received.astype(np.float32) - expected).mean()) < .5
+
+
+def save_target_keyframe(state, editor, context, force=True):
+    if not state or not state.get("frames") or not context:
+        raise gr.Error("Prepare a video and load a target frame first.")
+    if context["job"] != state["job"] or not _background_matches(editor, _frame_paths(state)[context["index"]]):
+        raise gr.Error("The editor is still changing frames. Wait for the frame to load, then try again.")
+    index = context["index"]
+    mask = _mask_from_editor(editor, _frame_paths(state)[index], allow_empty=True)
+    digest = mask_digest(mask)
+    changed = digest != context["digest"]
+    if changed or force:
+        if context["mode"] == "points" and not mask.any():
+            if changed:
+                remove_keyframe(state["job"], index)
+            elif force:
+                raise gr.Error("Paint inside the target before saving a keyframe.")
+        elif context["mode"] == "points" and mask.sum() < 16:
+            raise gr.Error("The brush selection is too small. Add a clearer stroke before switching frames.")
+        else:
+            save_keyframe(state["job"], index, mask, context["mode"])
+    return dict(context, digest=digest), keyframe_summary(state["job"])
+
+
+def switch_target_frame(state, frame_index, editor, context):
+    if context and state and context.get("job") == state.get("job"):
+        save_target_keyframe(state, editor, context, force=False)
+    return load_target_frame(state, frame_index)
+
+
+def forget_target_keyframe(state, frame_index, editor, context):
+    if not context or not state or context.get("job") != state.get("job"):
+        raise gr.Error("Load a target frame first.")
+    if int(frame_index) != context["index"] or not _background_matches(editor, _frame_paths(state)[context["index"]]):
+        raise gr.Error("Wait for the selected frame to load before removing its keyframe.")
+    remove_keyframe(state["job"], context["index"])
+    return load_target_frame(state, context["index"])
+
+
+def _mask_from_editor(editor: dict | None, frame: Path, allow_empty=False) -> np.ndarray:
     if not editor:
         raise gr.Error("Paint over the target before running SAM 2.1.")
     layers = editor.get("layers") or []
     if not layers:
+        if allow_empty:
+            with Image.open(frame) as image:
+                return np.zeros((image.height, image.width), dtype=bool)
         raise gr.Error("No brush stroke was found. Paint over the target first.")
     combined = None
     for layer in layers:
@@ -300,7 +383,7 @@ def _mask_from_editor(editor: dict | None, frame: Path) -> np.ndarray:
             alpha = array
         layer_mask = alpha > 8
         combined = layer_mask if combined is None else combined | layer_mask
-    if combined is None or int(combined.sum()) < 16:
+    if combined is None or (not allow_empty and int(combined.sum()) < 16):
         raise gr.Error("The brush selection is too small. Add a clearer stroke inside the target.")
     with Image.open(frame) as image:
         target_size = image.size
@@ -388,30 +471,104 @@ def _mask_debug_outputs(state: dict, mask_dir: Path, tag: str) -> tuple[list, li
     return overlays, masks, report
 
 
-def run_sam2(state: dict | None, frame_index: int, editor: dict | None, progress=gr.Progress()):
-    """Use the painted mask as a SAM 2.1 prompt and track in both directions."""
+def _matanyone_quality_gate(source_report: dict, refined_report: dict) -> dict:
+    """Decide whether a refinement is safe enough to replace the SAM masks."""
+    source_rows = {int(row["frame"]): row for row in source_report.get("per_frame", [])}
+    refined_rows = {int(row["frame"]): row for row in refined_report.get("per_frame", [])}
+    comparable = sorted(set(source_rows) & set(refined_rows))
+    eligible = [
+        index for index in comparable
+        if float(source_rows[index].get("coverage", 0.0)) >= 0.002
+    ]
+    collapsed = [
+        index for index in eligible
+        if float(refined_rows[index].get("coverage", 0.0))
+        < float(source_rows[index].get("coverage", 0.0)) * 0.35
+    ]
+    source_mean = float(source_report.get("mean_coverage", 0.0))
+    refined_mean = float(refined_report.get("mean_coverage", 0.0))
+    coverage_ratio = refined_mean / max(source_mean, 1e-9)
+    collapsed_fraction = len(collapsed) / max(1, len(eligible))
+    jumps = int(refined_report.get("large_centroid_jumps", 0))
+    jump_limit = max(5, int(np.ceil(max(1, len(comparable)) * 0.20)))
+    reasons = []
+    if coverage_ratio < 0.55:
+        reasons.append(
+            f"mean mask coverage retained only {coverage_ratio:.1%} of SAM "
+            f"({source_mean:.1%} → {refined_mean:.1%})"
+        )
+    if collapsed_fraction > 0.25:
+        reasons.append(
+            f"{len(collapsed)}/{len(eligible)} tracked frames collapsed below 35% of their SAM area"
+        )
+    if jumps > jump_limit:
+        reasons.append(f"{jumps} centroid jumps exceeded the safety limit of {jump_limit}")
+    return {
+        "accepted": not reasons,
+        "source_mean_coverage": source_mean,
+        "refined_mean_coverage": refined_mean,
+        "coverage_retained": coverage_ratio,
+        "comparable_frames": len(comparable),
+        "eligible_frames": len(eligible),
+        "collapsed_frames": collapsed,
+        "collapsed_fraction": collapsed_fraction,
+        "large_centroid_jumps": jumps,
+        "centroid_jump_limit": jump_limit,
+        "reasons": reasons,
+    }
+
+
+def _reject_stale_matanyone_source(state: dict) -> tuple[dict, dict | None]:
+    """Recheck resumed pre-gate jobs before their masks reach training."""
+    if state.get("mask_source") != "matanyone2":
+        return state, None
+    job = Path(state["job"])
+    sam_report = job / "sam2-mask-report.json"
+    refined_report = job / "matanyone2-mask-report.json"
+    if not sam_report.is_file() or not refined_report.is_file():
+        raise gr.Error("This MatAnyone2 result predates quality diagnostics. Rerun Refine matte before training.")
+    quality = _matanyone_quality_gate(
+        json.loads(sam_report.read_text(encoding="utf-8")),
+        json.loads(refined_report.read_text(encoding="utf-8")),
+    )
+    if quality["accepted"]:
+        return state, quality
+    state = dict(state)
+    state.pop("raw_splat", None)
+    state.update({"mask_source": "sam2", "mask_dir": str(job / "sam2_raw"), "complete_stage": 4})
+    (job / "matanyone2-quality-report.json").write_text(
+        json.dumps(quality, indent=2), encoding="utf-8"
+    )
+    (job / "job.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
+    _append_log(
+        _log_path(state),
+        "MATANYONE2 QUALITY GATE: REJECTED BEFORE TRAINING\n" + json.dumps(quality, indent=2),
+    )
+    return state, quality
+
+
+def run_sam2(state: dict | None, frame_index: int, editor: dict | None, context: dict, progress=gr.Progress()):
+    """Save current edits and use every persistent keyframe in one tracking session."""
     if not state or not state.get("frames"):
         raise gr.Error("Prepare a video first.")
     if not SAM2_CHECKPOINT.is_file() or not SAM2_CONFIG.is_file():
         raise gr.Error("The SAM 2.1 checkpoint or configuration is missing.")
     frames = _frame_paths(state)
-    index = max(0, min(int(frame_index), len(frames) - 1))
-    prompt = _mask_from_editor(editor, frames[index])
+    if not context or int(frame_index) != context["index"]:
+        raise gr.Error("Wait for the selected frame to load before propagating.")
+    save_target_keyframe(state, editor, context, force=False)
     job = Path(state["job"])
+    prompts = load_keyframe_prompts(job)
+    if not prompts:
+        raise gr.Error("Paint a target or save a keyframe before propagating.")
+    revision = keyframe_revision(job)
+    indices = [index for index, _, _ in prompts]
     raw = job / "sam2_raw"
-    # A loaded prediction is a full silhouette that the user corrected.  A new
-    # brush is only an interior hint and must be sent as positive points; SAM's
-    # add_new_mask API interprets every unpainted pixel as definite background.
-    is_mask_correction = (raw / f"{index:05d}.png").is_file()
-    if raw.exists():
-        shutil.rmtree(raw)
-    raw.mkdir()
-    Image.fromarray(prompt.astype(np.uint8) * 255).save(job / f"prompt-frame-{index:05d}.png")
-    prompt_mode = "corrected full mask" if is_mask_correction else "positive brush points"
     _append_log(
         _log_path(state),
-        f"\n### SAM 2.1\nprompt frame={index}, mode={prompt_mode}, "
-        f"painted pixels={int(prompt.sum())}",
+        f"\n### SAM 2.1\nUsing {len(prompts)} saved keyframes: {indices}\n"
+        + "\n".join(f"prompt frame={i}, mode={mode}, painted pixels={int(mask.sum())}"
+                     for i, mode, mask in prompts),
     )
 
     if str(SAM2_REPO) not in sys.path:
@@ -424,39 +581,58 @@ def run_sam2(state: dict | None, frame_index: int, editor: dict | None, progress
     tracked: dict[int, np.ndarray] = {}
     with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
         inference = predictor.init_state(video_path=str(job / "sam2_frames"))
-        if is_mask_correction:
-            predictor.add_new_mask(
-                inference_state=inference, frame_idx=index, obj_id=1, mask=prompt
-            )
-        else:
-            points = _positive_points_from_brush(prompt)
-            predictor.add_new_points_or_box(
-                inference_state=inference, frame_idx=index, obj_id=1,
-                points=points, labels=np.ones(len(points), dtype=np.int32),
-            )
+        validation = register_keyframes(predictor, inference, prompts, _positive_points_from_brush)
+        fallback_frames = set(validation["fallback_frames"])
+        validation_lines = []
+        for row in validation["frames"]:
+            if row["mode"] == "mask":
+                validation_lines.append(f"F{row['frame']:03d}: exact saved mask")
+            else:
+                validation_lines.append(
+                    f"F{row['frame']:03d}: {row['decision']}; IoU={row['iou']:.3f}, "
+                    f"paint recall={row['selection_recall']:.3f}, "
+                    f"complement IoU={row['complement_iou']:.3f}"
+                )
+        _append_log(
+            _log_path(state),
+            "Prompt-frame validation completed before propagation:\n" + "\n".join(validation_lines),
+        )
         for reverse in (False, True):
             direction = "backward" if reverse else "forward"
             for frame_id, _object_ids, logits in predictor.propagate_in_video(
-                inference, start_frame_idx=index, reverse=reverse
+                inference, start_frame_idx=min(indices), reverse=reverse
             ):
                 tracked[int(frame_id)] = (logits[0, 0] > 0).cpu().numpy()
                 progress(len(tracked) / max(1, len(frames)), desc=f"SAM 2.1 {direction}: {len(tracked)}/{len(frames)}")
     del predictor
     torch.cuda.empty_cache()
 
-    for frame_id, mask in tracked.items():
-        Image.fromarray(mask.astype(np.uint8) * 255).save(raw / f"{frame_id:05d}.png")
     if len(tracked) != len(frames):
         raise gr.Error(f"SAM 2.1 returned {len(tracked)}/{len(frames)} frame masks.")
+    # Explicit corrections and rejected/inverted point prompts remain exact at
+    # their authored frames, matching what the user approved in the editor.
+    for index, mode, mask in prompts:
+        if mode == "mask" or index in fallback_frames:
+            tracked[index] = mask
+    raw.mkdir(exist_ok=True)
+    for frame_id, mask in tracked.items():
+        Image.fromarray(mask.astype(np.uint8) * 255).save(raw / f"{frame_id:05d}.png")
+    (job / "sam2-keyframes-used.json").write_text(
+        json.dumps(dict(frames=indices, revision=revision), indent=2), encoding="utf-8")
     overlays, masks, report = _mask_debug_outputs(state, raw, "sam2")
     state = dict(state)
     state.update({"mask_source": "sam2", "mask_dir": str(raw), "complete_stage": 4})
     (job / "job.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
     _append_log(_log_path(state), json.dumps({key: value for key, value in report.items() if key != "per_frame"}))
+    fallback_note = (
+        f" Prompt validation replaced {len(fallback_frames)} contradictory frame(s) with their exact saved "
+        f"selection: {', '.join(f'F{index:03d}' for index in sorted(fallback_frames))}."
+        if fallback_frames else " All prompt-frame outputs agreed with their saved selections."
+    )
     status = (
-        f"**SAM 2.1 tracked {len(tracked)} frames.** Mean selected area: "
+        f"**SAM 2.1 tracked {len(tracked)} frames using all {len(prompts)} saved keyframes.** Mean selected area: "
         f"**{report['mean_coverage']:.1%}**; large centroid jumps: "
-        f"**{report['large_centroid_jumps']}**. Inspect every overlay. To fix a frame, "
+        f"**{report['large_centroid_jumps']}**.{fallback_note} Inspect every overlay. To fix a frame, "
         "move the frame slider, erase/add paint on the red layer, and run SAM 2.1 again."
     )
     return state, overlays, masks, status, _stage_panel(
@@ -469,11 +645,14 @@ def refine_matanyone2(state: dict | None, progress=gr.Progress()):
     """Run optional MatAnyone2 refinement from SAM's first-frame mask."""
     if not state or not state.get("mask_dir"):
         raise gr.Error("Run SAM 2.1 tracking first.")
+    require_applied_keyframes(state["job"])
     for required in (MA2_PYTHON, MA2_REPO, MA2_CHECKPOINT):
         if not required.exists():
             raise gr.Error(f"MatAnyone2 dependency is missing: {required}")
     job = Path(state["job"])
-    raw = Path(state["mask_dir"])
+    # MatAnyone2 is always evaluated against the complete validated SAM
+    # sequence, even when a resumed job previously activated a refinement.
+    raw = job / "sam2_raw"
     seed = raw / "00000.png"
     if not seed.is_file():
         raise gr.Error("SAM 2.1 did not produce a frame-zero mask for MatAnyone2.")
@@ -508,9 +687,42 @@ def refine_matanyone2(state: dict | None, progress=gr.Progress()):
             matte = matte.resize(size, Image.Resampling.BILINEAR)
         matte.save(refined / f"{index:05d}.png")
     overlays, masks, report = _mask_debug_outputs(state, refined, "matanyone2")
+    source_report_path = job / "sam2-mask-report.json"
+    if source_report_path.is_file():
+        source_report = json.loads(source_report_path.read_text(encoding="utf-8"))
+    else:
+        _, _, source_report = _mask_debug_outputs(state, raw, "sam2")
+    quality = _matanyone_quality_gate(source_report, report)
+    (job / "matanyone2-quality-report.json").write_text(
+        json.dumps(quality, indent=2), encoding="utf-8"
+    )
     state = dict(state)
+    state.pop("raw_splat", None)
+    if not quality["accepted"]:
+        state.update({"mask_source": "sam2", "mask_dir": str(raw), "complete_stage": 4})
+        (job / "job.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
+        explanation = "; ".join(quality["reasons"])
+        _append_log(
+            _log_path(state),
+            "MATANYONE2 QUALITY GATE: REJECTED\n" + json.dumps(quality, indent=2),
+        )
+        progress(1, desc="MatAnyone2 rejected; SAM masks remain active")
+        status = (
+            f"**MatAnyone2 was automatically rejected:** {explanation}. "
+            "The generated mattes remain visible here for debugging, but validated **SAM 2.1 masks remain "
+            "the active training source**. You can safely continue to Train."
+        )
+        return state, overlays, masks, status, _stage_panel(
+            "MatAnyone2 alpha refinement", "rejected",
+            "Quality gate blocked collapsed mattes; SAM 2.1 remains active.",
+        ), str(_log_path(state)), _tail(_log_path(state))
+
     state.update({"mask_source": "matanyone2", "mask_dir": str(refined), "complete_stage": 5})
     (job / "job.json").write_text(json.dumps(state, indent=2), encoding="utf-8")
+    _append_log(
+        _log_path(state),
+        "MATANYONE2 QUALITY GATE: ACCEPTED\n" + json.dumps(quality, indent=2),
+    )
     progress(1, desc="MatAnyone2 masks ready")
     status = (
         f"**MatAnyone2 refined {len(frames)} masks.** Mean selected area: "
@@ -548,6 +760,8 @@ def train_masked_splat(state: dict | None, quality: str, progress=gr.Progress())
     """Train Brush with the reviewed per-view masks."""
     if not state or not state.get("mask_dir"):
         raise gr.Error("Review a SAM 2.1 or MatAnyone2 mask sequence first.")
+    state, rejected_quality = _reject_stale_matanyone_source(state)
+    require_applied_keyframes(state["job"])
     if quality != state.get("quality"):
         raise gr.Error(
             f"This job was prepared at {state.get('quality')} quality. Change the quality back, "
@@ -577,6 +791,8 @@ def train_masked_splat(state: dict | None, quality: str, progress=gr.Progress())
             "This is an intermediate full scene; masked training can still leave hidden background "
             "Gaussians. Run the extraction stage to create the subject-only PLY."
         )
+        if rejected_quality and not rejected_quality["accepted"]:
+            status += " MatAnyone2 failed its quality gate, so this training run automatically used SAM masks."
         return state, str(result), status, _stage_panel(
             "Brush masked training", "complete", f"{count:,} Gaussians exported."
         ), str(_log_path(state)), _tail(_log_path(state))
@@ -589,7 +805,19 @@ def train_masked_splat(state: dict | None, quality: str, progress=gr.Progress())
 
 def extract_subject_splat(state: dict | None, progress=gr.Progress()):
     """Classify trained Gaussians using mask evidence from every camera view."""
-    if not state or not state.get("raw_splat"):
+    if not state:
+        raise gr.Error("Train the masked splat first.")
+    state, rejected_quality = _reject_stale_matanyone_source(state)
+    if rejected_quality and not rejected_quality["accepted"]:
+        reason = "; ".join(rejected_quality["reasons"])
+        return state, None, None, None, (
+            f"**Extraction blocked:** MatAnyone2 failed its quality gate ({reason}). "
+            "SAM masks are active again; rerun Train before extraction."
+        ), _stage_panel(
+            "Mask-guided Gaussian extraction", "failed",
+            "Collapsed MatAnyone2 masks were rejected; retraining with SAM masks is required.",
+        ), None, str(_log_path(state)), _tail(_log_path(state))
+    if not state.get("raw_splat"):
         raise gr.Error("Train the masked splat first.")
     job = Path(state["job"])
     raw_splat = Path(state["raw_splat"])

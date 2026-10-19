@@ -55,6 +55,26 @@ outputs/__pycache__/
 outputs/ui-server.log
 outputs/ui-server-error.log
 
+# Generated 3D, array, video, and research artefacts. Curated README media
+# belongs under docs/assets/ and is intentionally not covered by these rules.
+*.ply
+*.splat
+*.ksplat
+*.npy
+*.npz
+*.mp4
+*.mov
+*.m4v
+*.avi
+*.webm
+*.mkv
+work/**/*.log
+work/research/**/*.json
+work/research/**/*.csv
+work/research/**/*.png
+work/research/**/*.jpg
+work/research/**/*.jpeg
+
 # Generated test artefacts
 work/verify.py
 work/test_multiview.py
