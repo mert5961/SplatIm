@@ -46,6 +46,10 @@ work/research/SAPIENS2-60views/vis/
 # Multi-view test dataset (large raw images + precomputed sparse)
 work/multiview-test/
 
+# Research experiments and their renders/splats stay local
+work/research/
+work/*.log
+
 # Generated runtime outputs
 outputs/multi-view-scenes/
 outputs/my-splats/
@@ -54,6 +58,7 @@ outputs/video-subject-jobs/
 outputs/__pycache__/
 outputs/ui-server.log
 outputs/ui-server-error.log
+outputs/verification.json
 
 # Generated 3D, array, video, and research artefacts. Curated README media
 # belongs under docs/assets/ and is intentionally not covered by these rules.
